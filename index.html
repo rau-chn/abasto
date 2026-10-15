@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta name="theme-color" content="#1e3a8a">
+  <meta name="description" content="Abasto - Registro ágil de compras mayoristas de bodega 100% offline">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./css/styles.css">
+  <title>Abasto</title>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Encabezado Principal -->
+    <header class="app-header">
+      <div class="header-left">
+        <a href="#home" class="brand-title" id="link-brand">
+          <span>Abasto</span>
+          <span class="brand-badge">BODEGA</span>
+        </a>
+      </div>
+
+      <div class="header-actions">
+        <!-- Botón Rápido de Instalación PWA (aparece cuando el navegador lo soporta) -->
+        <button id="btn-install-pwa" class="btn btn-outline" style="min-height: 32px; padding: 2px 8px; font-size: 0.8rem; background: rgba(255,255,255,0.2); color: #ffffff; border-color: rgba(255,255,255,0.4); display: none; font-weight: 700;" title="Instalar Abasto en tu celular o PC">
+          📲 Instalar
+        </button>
+
+        <!-- Indicador de Almacenamiento Persistente -->
+        <span id="storage-status-badge" class="badge" style="background: rgba(255,255,255,0.15); color: #ffffff; cursor: pointer; display: none;" title="Estado de almacenamiento">
+          💾 Local
+        </span>
+
+        <!-- Botón de Modo Oscuro -->
+        <button id="btn-toggle-theme" class="btn-icon" title="Cambiar tema claro/oscuro" aria-label="Cambiar tema">
+          🌙
+        </button>
+
+        <!-- Botón a Respaldo/Configuración -->
+        <a href="#backup" class="btn-icon" title="Respaldos y opciones" aria-label="Respaldos">
+          ⚙️
+        </a>
+      </div>
+    </header>
+
+    <!-- Banner de actualización de Service Worker (Nueva versión disponible) -->
+    <div id="sw-update-banner" class="update-banner" style="display: none;">
+      <span>Hay una nueva versión de Abasto disponible.</span>
+      <button id="btn-sw-update" class="btn btn-outline" style="min-height: 32px; padding: 4px 10px; font-size: 0.8rem; background: #ffffff; color: var(--color-primary); font-weight: 800;">
+        Actualizar ahora
+      </button>
+    </div>
+
+    <!-- Área principal donde se renderizan las pantallas -->
+    <main id="app-root" class="app-main"></main>
+  </div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

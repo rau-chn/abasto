@@ -1,0 +1,13 @@
+{
+  "name": "abasto",
+  "version": "1.0.0",
+  "description": "App PWA 100% offline para registrar compras mayoristas de bodega",
+  "type": "module",
+  "scripts": {
+    "test": "node test/tests.mjs",
+    "serve": "node server.mjs"
+  },
+  "keywords": ["pwa", "offline", "bodega", "peru", "indexeddb"],
+  "author": "",
+  "license": "MIT"
+}
