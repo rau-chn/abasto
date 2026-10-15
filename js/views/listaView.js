@@ -16,6 +16,8 @@ import { derivarEstadoLista, normalizarTexto, normalizarUnidad } from '../models
 import { interpretarTextoCompleto, parsearCSV, decodificarBufferTexto } from '../parser.js';
 
 let filtroEstado = 'todos'; // 'todos' | 'pendientes' | 'comprados'
+let busquedaTexto = '';
+let ordenLista = 'pendientes'; // 'pendientes' | 'az' | 'za' | 'original'
 
 export function renderListaView(container, salidaId) {
   const state = getState();
@@ -40,12 +42,36 @@ export function renderListaView(container, salidaId) {
   const stands = Array.isArray(salida.stands) ? salida.stands : [];
   const catalogo = state.catalogo || { productos: [], unidades: [] };
 
-  // Filtrar según píldora seleccionada
-  let itemsFiltrados = itemsEnriquecidos;
+  // 1. Filtrar según píldora seleccionada
+  let itemsFiltrados = [...itemsEnriquecidos];
   if (filtroEstado === 'pendientes') {
-    itemsFiltrados = itemsEnriquecidos.filter(i => !i.comprado);
+    itemsFiltrados = itemsFiltrados.filter(i => !i.comprado);
   } else if (filtroEstado === 'comprados') {
-    itemsFiltrados = itemsEnriquecidos.filter(i => i.comprado);
+    itemsFiltrados = itemsFiltrados.filter(i => i.comprado);
+  }
+
+  // 2. Filtrar por término de búsqueda (insensible a tildes, mayúsculas y espacios)
+  if (busquedaTexto && busquedaTexto.trim()) {
+    const term = normalizarTexto(busquedaTexto);
+    itemsFiltrados = itemsFiltrados.filter(i => {
+      const prodNorm = normalizarTexto(i.producto);
+      const unidNorm = normalizarTexto(i.unidad);
+      return prodNorm.includes(term) || unidNorm.includes(term);
+    });
+  }
+
+  // 3. Ordenamiento
+  if (ordenLista === 'az') {
+    itemsFiltrados.sort((a, b) => a.producto.localeCompare(b.producto, 'es', { sensitivity: 'base' }));
+  } else if (ordenLista === 'za') {
+    itemsFiltrados.sort((a, b) => b.producto.localeCompare(a.producto, 'es', { sensitivity: 'base' }));
+  } else if (ordenLista === 'pendientes') {
+    itemsFiltrados.sort((a, b) => {
+      if (a.comprado !== b.comprado) {
+        return a.comprado ? 1 : -1;
+      }
+      return a.producto.localeCompare(b.producto, 'es', { sensitivity: 'base' });
+    });
   }
 
   const html = `
@@ -131,9 +157,42 @@ export function renderListaView(container, salidaId) {
       </div>
     </div>
 
+    <!-- Buscador y Ordenamiento de la Lista -->
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <div style="position: relative; flex: 1;">
+        <input
+          type="text"
+          id="input-buscar-lista"
+          class="form-input"
+          placeholder="🔍 Buscar en la lista..."
+          value="${escapeHtml(busquedaTexto)}"
+          autocomplete="off"
+          style="padding-left: 36px; padding-right: 32px; min-height: 40px; font-size: 0.9rem;"
+        />
+        <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 1.05rem; color: var(--color-text-dim); pointer-events: none;">🔍</span>
+        ${busquedaTexto ? `
+          <button
+            id="btn-limpiar-busqueda-lista"
+            type="button"
+            style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; font-size: 1.1rem; color: var(--color-text-dim); cursor: pointer; padding: 4px;"
+            title="Borrar búsqueda"
+          >✕</button>
+        ` : ''}
+      </div>
+
+      <div style="min-width: 135px;">
+        <select id="select-orden-lista" class="form-select" style="min-height: 40px; font-size: 0.85rem; padding: 4px 6px; font-weight: 700;">
+          <option value="pendientes" ${ordenLista === 'pendientes' ? 'selected' : ''}>⏳ Pendientes 1°</option>
+          <option value="az" ${ordenLista === 'az' ? 'selected' : ''}>🔤 A – Z</option>
+          <option value="za" ${ordenLista === 'za' ? 'selected' : ''}>🔤 Z – A</option>
+          <option value="original" ${ordenLista === 'original' ? 'selected' : ''}>📋 Orden original</option>
+        </select>
+      </div>
+    </div>
+
     <!-- Filtros de Estado: Todos / Pendientes / Comprados -->
-    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-      <div style="display: flex; gap: 4px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+      <div style="display: flex; gap: 4px; align-items: center;">
         <button class="btn btn-outline btn-filtro ${filtroEstado === 'todos' ? 'active' : ''}" data-filtro="todos" style="min-height: 36px; padding: 4px 10px; font-size: 0.85rem; border-radius: 999px;">
           Todos (${totalItems})
         </button>
@@ -145,11 +204,19 @@ export function renderListaView(container, salidaId) {
         </button>
       </div>
 
-      ${totalItems > 0 ? `
-        <button id="btn-limpiar-lista" class="btn btn-danger-outline" style="min-height: 36px; padding: 4px 8px; font-size: 0.75rem;">
-          Vaciar lista
-        </button>
-      ` : ''}
+      <div style="display: flex; align-items: center; gap: 8px;">
+        ${busquedaTexto ? `
+          <span style="font-size: 0.8rem; color: var(--color-text-dim);">
+            Mostrando ${itemsFiltrados.length} de ${totalItems}
+          </span>
+        ` : ''}
+
+        ${totalItems > 0 ? `
+          <button id="btn-limpiar-lista" class="btn btn-danger-outline" style="min-height: 36px; padding: 4px 8px; font-size: 0.75rem;">
+            Vaciar lista
+          </button>
+        ` : ''}
+      </div>
     </div>
 
     <!-- Lista de Ítems Planificados -->
@@ -320,6 +387,30 @@ export function renderListaView(container, salidaId) {
       filtroEstado = btn.dataset.filtro;
       renderListaView(container, salidaId);
     });
+  });
+
+  // Buscador en tiempo real de la lista
+  const inputBuscar = container.querySelector('#input-buscar-lista');
+  inputBuscar?.addEventListener('input', (e) => {
+    busquedaTexto = e.target.value;
+    renderListaView(container, salidaId);
+    const nuevoInput = container.querySelector('#input-buscar-lista');
+    if (nuevoInput) {
+      nuevoInput.focus();
+      nuevoInput.setSelectionRange(busquedaTexto.length, busquedaTexto.length);
+    }
+  });
+
+  container.querySelector('#btn-limpiar-busqueda-lista')?.addEventListener('click', () => {
+    busquedaTexto = '';
+    renderListaView(container, salidaId);
+  });
+
+  // Selector de Ordenamiento (Pendientes primero, A-Z, Z-A, Original)
+  const selectOrden = container.querySelector('#select-orden-lista');
+  selectOrden?.addEventListener('change', (e) => {
+    ordenLista = e.target.value;
+    renderListaView(container, salidaId);
   });
 
   // Agregar Ítem Manual
