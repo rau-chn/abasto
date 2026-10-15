@@ -89,10 +89,14 @@ export function renderBackupView(container) {
           ⬇️ Descargar Respaldo
         </button>
         <button id="btn-importar-json-trigger" class="btn btn-outline" style="font-weight: 800; font-size: 0.9rem; padding: 12px 8px;">
-          ⬆️ Restaurar Respaldo
+          📁 Elegir Archivo
         </button>
-        <input type="file" id="input-archivo-json" accept=".json,application/json" style="display: none;" />
+        <input type="file" id="input-archivo-json" accept=".json,application/json,text/plain,*/*" style="display: none;" />
       </div>
+
+      <button id="btn-pegar-json-trigger" class="btn btn-outline" style="font-size: 0.85rem; padding: 10px 8px; font-weight: 700; width: 100%; border-style: dashed;">
+        📋 O pegar texto del respaldo directamente (Sin buscar archivos)
+      </button>
     </div>
 
     <!-- SECCIÓN 2: Exportar Resumen a Excel (CSV) y Compartir -->
@@ -216,6 +220,35 @@ export function renderBackupView(container) {
         </div>
       </div>
     </div>
+
+    <!-- MODAL PEGAR TEXTO JSON DIRECTO (Sin buscar en el gestor de archivos) -->
+    <div id="modal-pegar-json" class="modal-overlay" style="display: none;">
+      <div class="modal-content" style="max-width: 520px;" onclick="event.stopPropagation();">
+        <div class="modal-header">
+          <h3 class="modal-title">Pegar Texto del Respaldo</h3>
+          <button id="btn-cerrar-modal-pegar-json" class="btn-icon">✕</button>
+        </div>
+
+        <p style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 8px;">
+          Abre el archivo en tu celular o copia el texto de tu mensaje y pégalo aquí:
+        </p>
+
+        <textarea
+          id="textarea-pegar-json"
+          class="form-textarea"
+          rows="8"
+          placeholder='Pega aquí el contenido que empieza con {"app":"Abasto"...'
+          style="font-family: monospace; font-size: 0.8rem;"
+        ></textarea>
+
+        <div class="modal-actions" style="margin-top: 12px;">
+          <button id="btn-cancelar-pegar-json" class="btn btn-outline">Cancelar</button>
+          <button id="btn-procesar-pegar-json" class="btn btn-primary" style="font-weight: 800;">
+            Validar y Continuar ➔
+          </button>
+        </div>
+      </div>
+    </div>
   `;
 
   container.innerHTML = html;
@@ -247,6 +280,54 @@ export function renderBackupView(container) {
   btnImportarTrigger?.addEventListener('click', () => {
     inputJson.value = '';
     inputJson.click();
+  });
+
+  // Modal Pegar Texto JSON
+  const modalPegarJson = container.querySelector('#modal-pegar-json');
+  const textareaPegarJson = container.querySelector('#textarea-pegar-json');
+  const btnPegarJsonTrigger = container.querySelector('#btn-pegar-json-trigger');
+
+  btnPegarJsonTrigger?.addEventListener('click', () => {
+    textareaPegarJson.value = '';
+    modalPegarJson.style.display = 'flex';
+    setTimeout(() => textareaPegarJson.focus(), 50);
+  });
+
+  const cerrarModalPegarJson = () => {
+    modalPegarJson.style.display = 'none';
+  };
+  container.querySelector('#btn-cerrar-modal-pegar-json')?.addEventListener('click', cerrarModalPegarJson);
+  container.querySelector('#btn-cancelar-pegar-json')?.addEventListener('click', cerrarModalPegarJson);
+
+  container.querySelector('#btn-procesar-pegar-json')?.addEventListener('click', () => {
+    const contenido = textareaPegarJson.value.trim();
+    if (!contenido) {
+      alert('Pega el texto del respaldo en la casilla.');
+      textareaPegarJson.focus();
+      return;
+    }
+
+    const resultado = validarJSONRespaldo(contenido);
+    if (!resultado.ok) {
+      alert('❌ Error al validar el texto:\n' + resultado.error);
+      return;
+    }
+
+    datosValidadosAImportar = resultado.data;
+    const cantSalidas = datosValidadosAImportar.salidas.length;
+    const fechaExport = datosValidadosAImportar.exportedAt
+      ? new Date(datosValidadosAImportar.exportedAt).toLocaleString('es-PE')
+      : 'Desconocida';
+
+    resumenImportar.innerHTML = `
+      <div><strong>Origen:</strong> Texto pegado directamente</div>
+      <div><strong>Fecha de exportación:</strong> ${fechaExport}</div>
+      <div><strong>Salidas encontradas:</strong> ${cantSalidas}</div>
+      <div><strong>Salidas locales actuales:</strong> ${salidas.length}</div>
+    `;
+
+    cerrarModalPegarJson();
+    modalImportar.style.display = 'flex';
   });
 
   inputJson?.addEventListener('change', (e) => {
