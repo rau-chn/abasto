@@ -633,13 +633,20 @@ body {
 }
 
 /* Estilos de Impresión / PDF */
+.print-only {
+  display: none !important;
+}
+
 @media print {
   body {
     background-color: #ffffff !important;
     color: #000000 !important;
   }
-  .app-header, .bottom-total-bar, .btn, .no-print {
+  .app-header, .bottom-total-bar, .btn, .no-print, .modal-overlay, .nav-tabs {
     display: none !important;
+  }
+  .print-only {
+    display: block !important;
   }
   .app-container {
     max-width: 100% !important;
@@ -647,8 +654,26 @@ body {
     padding: 0 !important;
   }
   .card {
-    border: 1px solid #000000 !important;
+    border: 1px solid #cccccc !important;
     box-shadow: none !important;
     page-break-inside: avoid;
   }
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 11pt;
+  }
+  .print-table th, .print-table td {
+    border: 1px solid #333333;
+    padding: 6px 8px;
+    text-align: left;
+  }
+  .print-table th {
+    background-color: #f1f5f9 !important;
+    font-weight: bold;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
+

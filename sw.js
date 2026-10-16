@@ -4,7 +4,7 @@
  * Soporte 100% offline tras la primera carga.
  */
 
-const CACHE_NAME = 'abasto-v10';
+const CACHE_NAME = 'abasto-v11';
 
 // Lista exhaustiva de activos del App Shell
 const PRECACHE_ASSETS = [

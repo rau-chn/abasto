@@ -9,7 +9,8 @@
 import {
   calcularTotalesStand,
   calcularTotalesSalida,
-  agruparPorProductoYUnidad
+  agruparPorProductoYUnidad,
+  derivarEstadoLista
 } from './models.js';
 import { centimosToSoles, formatMoney, describirDiferencia } from './money.js';
 
@@ -364,4 +365,173 @@ export function necesitaRecordatorioRespaldo(totalSalidas) {
 
   const SIETE_DIAS_MS = 7 * 24 * 60 * 60 * 1000;
   return (Date.now() - lastBackup) > SIETE_DIAS_MS;
+}
+
+/**
+ * Genera el texto CSV completo de la lista de compras planificada.
+ * Incluye BOM UTF-8 (\uFEFF) para visualización sin caracteres extraños en Excel.
+ * @param {object} salida
+ * @param {boolean} [soloPendientes=false]
+ * @returns {string}
+ */
+export function generarCSVListaPlanificada(salida, soloPendientes = false) {
+  if (!salida) return '';
+
+  const itemsEnriquecidos = derivarEstadoLista(salida);
+  const items = soloPendientes
+    ? itemsEnriquecidos.filter(i => !i.comprado)
+    : itemsEnriquecidos;
+
+  const BOM = '\uFEFF';
+  const lineasCSV = [];
+
+  lineasCSV.push('LISTA DE COMPRAS - ABASTO');
+  lineasCSV.push(`Fecha,${escaparCSV(salida.fecha || '')}`);
+  lineasCSV.push(`Salida,${escaparCSV(salida.nombre || 'Compra')}`);
+  lineasCSV.push(`Alcance,${escaparCSV(soloPendientes ? 'Solo Pendientes por comprar' : 'Lista Completa')}`);
+  lineasCSV.push(`Total Ítems en este reporte,${escaparCSV(items.length)}`);
+  lineasCSV.push('');
+
+  lineasCSV.push('Estado,Cantidad Planeada,Unidad,Producto,Cantidad Comprada,Puesto(s) de Compra');
+
+  for (const item of items) {
+    const estado = item.comprado ? 'COMPRADO' : 'PENDIENTE';
+    const cantPlaneada = item.cantidadPlaneada;
+    const unidad = item.unidad || 'unidad';
+    const prod = item.producto;
+    const cantComprada = item.cantidadComprada || 0;
+    const standsComprados = (item.lineasAsociadas || [])
+      .map(l => l.standNombre)
+      .filter(Boolean);
+    const standsStr = Array.from(new Set(standsComprados)).join('; ');
+
+    lineasCSV.push([
+      escaparCSV(estado),
+      escaparCSV(cantPlaneada),
+      escaparCSV(unidad),
+      escaparCSV(prod),
+      escaparCSV(cantComprada),
+      escaparCSV(standsStr)
+    ].join(','));
+  }
+
+  return BOM + lineasCSV.join('\r\n');
+}
+
+/**
+ * Descarga el archivo CSV de la lista de compras para Excel.
+ * @param {object} salida
+ * @param {boolean} [soloPendientes=false]
+ * @returns {string} - Nombre del archivo generado
+ */
+export function exportarCSVListaPlanificada(salida, soloPendientes = false) {
+  if (!salida) return '';
+  const fecha = salida.fecha || new Date().toISOString().split('T')[0];
+  const sufijo = soloPendientes ? 'pendientes' : 'completa';
+  const nombreArchivo = `abasto-lista-${sufijo}-${fecha}.csv`;
+  const csvContent = generarCSVListaPlanificada(salida, soloPendientes);
+
+  descargarArchivo(nombreArchivo, csvContent, 'text/csv;charset=utf-8');
+  return nombreArchivo;
+}
+
+/**
+ * Genera el texto formateado de la lista de compras para compartir por WhatsApp o notas.
+ * @param {object} salida
+ * @param {boolean} [soloPendientes=false]
+ * @returns {string}
+ */
+export function generarTextoWhatsAppLista(salida, soloPendientes = false) {
+  if (!salida) return '';
+
+  const items = derivarEstadoLista(salida);
+  const pendientes = items.filter(i => !i.comprado);
+  const comprados = items.filter(i => i.comprado);
+
+  let texto = `*📋 ABASTO - LISTA DE COMPRAS*\n`;
+  texto += `📅 Fecha: ${salida.fecha || 'Hoy'}\n`;
+  if (salida.nombre) texto += `📝 Salida: ${salida.nombre}\n`;
+  texto += `📊 Total: ${items.length} ítems (${pendientes.length} pendientes, ${comprados.length} comprados)\n\n`;
+
+  if (pendientes.length > 0) {
+    texto += `*⏳ PENDIENTES POR COMPRAR (${pendientes.length}):*\n`;
+    pendientes.forEach((p, idx) => {
+      texto += `${idx + 1}. [ ] *${p.cantidadPlaneada} ${p.unidad || 'unidad'}* - ${p.producto}\n`;
+    });
+  } else {
+    texto += `🎉 *¡Todo comprado! No tienes productos pendientes.*\n`;
+  }
+
+  if (!soloPendientes && comprados.length > 0) {
+    texto += `\n*✅ YA COMPRADOS (${comprados.length}):*\n`;
+    comprados.forEach((c, idx) => {
+      texto += `${idx + 1}. [✓] *${c.cantidadPlaneada} ${c.unidad || 'unidad'}* - ${c.producto} (Adquirido: ${c.cantidadComprada} ${c.unidad || 'unidad'})\n`;
+    });
+  }
+
+  texto += `\n_Generado automáticamente con Abasto Bodega_`;
+  return texto;
+}
+
+/**
+ * Comparte la lista de compras mediante Web Share API o WhatsApp.
+ * @param {object} salida
+ * @param {boolean} [soloPendientes=false]
+ * @returns {Promise<boolean>}
+ */
+export async function compartirListaWhatsApp(salida, soloPendientes = false) {
+  const texto = generarTextoWhatsAppLista(salida, soloPendientes);
+  const titulo = `Lista de Compras - ${salida.nombre || salida.fecha || 'Abasto'}`;
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: titulo,
+        text: texto
+      });
+      return true;
+    } catch (err) {
+      if (err.name === 'AbortError') return false;
+    }
+  }
+
+  const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+  window.open(url, '_blank');
+  return true;
+}
+
+/**
+ * Copia un texto al portapapeles de forma compatible en PC y móvil.
+ * @param {string} texto
+ * @returns {Promise<boolean>}
+ */
+export async function copiarTextoPortapapeles(texto) {
+  if (!texto) return false;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(texto);
+      return true;
+    } catch (e) {
+      // Continuar con fallback
+    }
+  }
+
+  const textArea = document.createElement('textarea');
+  textArea.value = texto;
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-9999px';
+  textArea.style.top = '0';
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  try {
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textArea);
+    return ok;
+  } catch (err) {
+    document.body.removeChild(textArea);
+    return false;
+  }
 }

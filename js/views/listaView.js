@@ -14,6 +14,12 @@ import {
 } from '../store.js';
 import { derivarEstadoLista, normalizarTexto, normalizarUnidad } from '../models.js';
 import { interpretarTextoCompleto, parsearCSV, decodificarBufferTexto } from '../parser.js';
+import {
+  exportarCSVListaPlanificada,
+  compartirListaWhatsApp,
+  generarTextoWhatsAppLista,
+  copiarTextoPortapapeles
+} from '../export.js';
 
 let filtroEstado = 'todos'; // 'todos' | 'pendientes' | 'comprados'
 let busquedaTexto = '';
@@ -75,8 +81,11 @@ export function renderListaView(container, salidaId) {
   }
 
   const html = `
+    <!-- Área especial para Impresión / Guardar como PDF (Solo visible al imprimir) -->
+    <div id="seccion-impresion-lista" class="print-only"></div>
+
     <!-- Barra superior de navegación -->
-    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+    <div class="no-print" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
       <button id="btn-volver-stands" class="btn btn-outline" style="min-height: 40px; padding: 6px 12px; font-size: 0.9rem;">
         ◀ Volver a Stands
       </button>
@@ -91,25 +100,28 @@ export function renderListaView(container, salidaId) {
     </div>
 
     <!-- Pestañas de la salida actual -->
-    <div class="nav-tabs">
+    <div class="nav-tabs no-print">
       <button id="tab-stands-nav" class="nav-tab-btn">Stands (${stands.length})</button>
       <button class="nav-tab-btn active">Lista Planificada (${totalItems})</button>
       <button id="tab-resumen-nav" class="nav-tab-btn">Resumen Final</button>
     </div>
 
-    <!-- Botones de Acción Rápida: Pegar Texto y CSV -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-      <button id="btn-abrir-pegar-texto" class="btn btn-outline" style="font-size: 0.9rem; font-weight: 700; padding: 8px;">
+    <!-- Botones de Acción: Carga y Exportación/Compartir -->
+    <div class="no-print" style="display: grid; grid-template-columns: 1fr 1fr 1.25fr; gap: 6px;">
+      <button id="btn-abrir-pegar-texto" class="btn btn-outline" style="font-size: 0.85rem; font-weight: 700; padding: 8px 4px;">
         📋 Pegar texto
       </button>
-      <button id="btn-abrir-importar-csv" class="btn btn-outline" style="font-size: 0.9rem; font-weight: 700; padding: 8px;">
-        📁 Importar CSV (Excel)
+      <button id="btn-abrir-importar-csv" class="btn btn-outline" style="font-size: 0.85rem; font-weight: 700; padding: 8px 4px;">
+        📁 Importar CSV
+      </button>
+      <button id="btn-abrir-exportar-lista" class="btn btn-primary" style="font-size: 0.85rem; font-weight: 800; padding: 8px 6px;">
+        📤 Exportar / Compartir
       </button>
       <input type="file" id="input-archivo-csv" accept=".csv,text/csv" style="display: none;" />
     </div>
 
     <!-- Formulario de Entrada Manual de Ítems -->
-    <div class="card" style="padding: 12px; border: 1.5px solid var(--color-border);">
+    <div class="card no-print" style="padding: 12px; border: 1.5px solid var(--color-border);">
       <h3 style="font-size: 0.95rem; font-weight: 800; color: var(--color-text-muted); text-transform: uppercase;">
         ➕ Agregar Ítem a la Lista
       </h3>
@@ -158,7 +170,7 @@ export function renderListaView(container, salidaId) {
     </div>
 
     <!-- Buscador y Ordenamiento de la Lista -->
-    <div style="display: flex; gap: 8px; align-items: center;">
+    <div class="no-print" style="display: flex; gap: 8px; align-items: center;">
       <div style="position: relative; flex: 1;">
         <input
           type="text"
@@ -191,7 +203,7 @@ export function renderListaView(container, salidaId) {
     </div>
 
     <!-- Filtros de Estado: Todos / Pendientes / Comprados -->
-    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+    <div class="no-print" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
       <div style="display: flex; gap: 4px; align-items: center;">
         <button class="btn btn-outline btn-filtro ${filtroEstado === 'todos' ? 'active' : ''}" data-filtro="todos" style="min-height: 36px; padding: 4px 10px; font-size: 0.85rem; border-radius: 999px;">
           Todos (${totalItems})
@@ -221,7 +233,7 @@ export function renderListaView(container, salidaId) {
 
     <!-- Lista de Ítems Planificados -->
     ${itemsFiltrados.length === 0 ? `
-      <div class="card" style="text-align: center; padding: 32px 16px; color: var(--color-text-dim);">
+      <div class="card no-print" style="text-align: center; padding: 32px 16px; color: var(--color-text-dim);">
         <p style="font-size: 2rem; margin-bottom: 6px;">📝</p>
         <p style="font-weight: 700; color: var(--color-text);">No hay ítems en esta vista</p>
         <p style="font-size: 0.85rem; margin-top: 4px;">
@@ -231,7 +243,7 @@ export function renderListaView(container, salidaId) {
         </p>
       </div>
     ` : `
-      <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div class="no-print" style="display: flex; flex-direction: column; gap: 8px;">
         ${itemsFiltrados.map(item => {
           return `
             <div class="card" style="padding: 12px; border-left: 5px solid ${item.comprado ? 'var(--color-success)' : 'var(--color-warning)'};">
@@ -361,6 +373,88 @@ export function renderListaView(container, salidaId) {
         <div class="modal-actions" style="margin-top: 10px;">
           <button id="btn-cancelar-edit-item" class="btn btn-outline">Cancelar</button>
           <button id="btn-guardar-edit-item" class="btn btn-primary">Guardar Cambios</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 4: Exportar / Compartir Lista de Compras -->
+    <div id="modal-exportar-lista" class="modal-overlay no-print" style="display: none;">
+      <div class="modal-content" style="max-width: 500px;" onclick="event.stopPropagation();">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title" style="font-size: 1.15rem;">📤 Exportar / Compartir Lista</h3>
+            <span style="font-size: 0.8rem; color: var(--color-text-dim);">${escapeHtml(salida.nombre || 'Compra')}</span>
+          </div>
+          <button id="btn-cerrar-modal-exportar" class="btn-icon">✕</button>
+        </div>
+
+        <!-- Selector de Alcance (Pendientes vs Todos) -->
+        <div class="card" style="padding: 10px; background-color: var(--color-surface-hover); border: 1.5px solid var(--color-border); margin: 0;">
+          <label style="font-size: 0.85rem; font-weight: 800; color: var(--color-text-muted); display: block; margin-bottom: 6px;">
+            ¿Qué productos deseas incluir?
+          </label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 700; background: var(--color-surface); padding: 8px 10px; border-radius: var(--radius-sm); border: 1.5px solid var(--color-border);">
+              <input type="radio" name="radio-alcance-exportar" value="pendientes" checked />
+              <span>⏳ Pendientes (${pendientesCount})</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 700; background: var(--color-surface); padding: 8px 10px; border-radius: var(--radius-sm); border: 1.5px solid var(--color-border);">
+              <input type="radio" name="radio-alcance-exportar" value="todos" />
+              <span>📋 Toda la lista (${totalItems})</span>
+            </label>
+          </div>
+        </div>
+
+        <div id="toast-copiado-lista" style="display: none; padding: 8px; border-radius: var(--radius-sm); background: var(--color-success-bg); color: var(--color-success); font-weight: 700; font-size: 0.85rem; text-align: center;">
+          ✓ ¡Lista copiada al portapapeles!
+        </div>
+
+        <!-- Opciones de Exportación / Envío -->
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- 1. PDF / Imprimir -->
+          <button id="btn-accion-exportar-pdf" type="button" class="btn btn-outline" style="min-height: 48px; justify-content: flex-start; padding: 8px 12px; text-align: left; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.4rem;">📄</span>
+            <div style="flex: 1;">
+              <div style="font-weight: 800; font-size: 0.95rem; color: var(--color-text);">Guardar como PDF / Imprimir</div>
+              <div style="font-size: 0.75rem; color: var(--color-text-dim);">Hoja con casillas de verificación para imprimir o guardar PDF en celular/PC</div>
+            </div>
+            <span style="font-size: 1rem; color: var(--color-primary); font-weight: 800;">➔</span>
+          </button>
+
+          <!-- 2. Excel (CSV) -->
+          <button id="btn-accion-exportar-excel" type="button" class="btn btn-outline" style="min-height: 48px; justify-content: flex-start; padding: 8px 12px; text-align: left; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.4rem;">📊</span>
+            <div style="flex: 1;">
+              <div style="font-weight: 800; font-size: 0.95rem; color: var(--color-text);">Descargar archivo Excel (.csv)</div>
+              <div style="font-size: 0.75rem; color: var(--color-text-dim);">Compatible con Excel y Google Sheets (cantidades, unidades y estado)</div>
+            </div>
+            <span style="font-size: 1rem; color: var(--color-primary); font-weight: 800;">⬇️</span>
+          </button>
+
+          <!-- 3. WhatsApp -->
+          <button id="btn-accion-exportar-whatsapp" type="button" class="btn btn-outline" style="min-height: 48px; justify-content: flex-start; padding: 8px 12px; text-align: left; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.4rem;">💬</span>
+            <div style="flex: 1;">
+              <div style="font-weight: 800; font-size: 0.95rem; color: var(--color-text);">Enviar por WhatsApp</div>
+              <div style="font-size: 0.75rem; color: var(--color-text-dim);">Comparte la lista ordenada con casillas para tu socio o ayudante</div>
+            </div>
+            <span style="font-size: 1rem; color: var(--color-success); font-weight: 800;">📱</span>
+          </button>
+
+          <!-- 4. Copiar al Portapapeles -->
+          <button id="btn-accion-exportar-copiar" type="button" class="btn btn-outline" style="min-height: 44px; justify-content: flex-start; padding: 8px 12px; text-align: left; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.3rem;">📋</span>
+            <div style="flex: 1;">
+              <div style="font-weight: 800; font-size: 0.9rem; color: var(--color-text);">Copiar texto al portapapeles</div>
+              <div style="font-size: 0.75rem; color: var(--color-text-dim);">Para pegar en notas, mensajes de texto o cualquier app</div>
+            </div>
+          </button>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 4px;">
+          <button id="btn-cerrar-modal-exportar-footer" class="btn btn-primary" style="width: 100%;">
+            Cerrar
+          </button>
         </div>
       </div>
     </div>
@@ -682,6 +776,132 @@ export function renderListaView(container, salidaId) {
       await limpiarListaPlanificadaAction(salidaId);
     }
   });
+
+  // Modal Exportar / Compartir Lista
+  const modalExportar = container.querySelector('#modal-exportar-lista');
+  const abrirModalExportar = () => {
+    if (totalItems === 0) {
+      alert('La lista de compras está vacía. Agrega productos antes de exportar o compartir.');
+      return;
+    }
+    if (modalExportar) modalExportar.style.display = 'flex';
+  };
+  const cerrarModalExportar = () => {
+    if (modalExportar) modalExportar.style.display = 'none';
+  };
+
+  container.querySelector('#btn-abrir-exportar-lista')?.addEventListener('click', abrirModalExportar);
+  container.querySelector('#btn-cerrar-modal-exportar')?.addEventListener('click', cerrarModalExportar);
+  container.querySelector('#btn-cerrar-modal-exportar-footer')?.addEventListener('click', cerrarModalExportar);
+  modalExportar?.addEventListener('click', (e) => {
+    if (e.target === modalExportar) cerrarModalExportar();
+  });
+
+  const getSoloPendientes = () => {
+    const radio = container.querySelector('input[name="radio-alcance-exportar"]:checked');
+    return radio ? radio.value === 'pendientes' : false;
+  };
+
+  // 1. PDF / Imprimir
+  container.querySelector('#btn-accion-exportar-pdf')?.addEventListener('click', () => {
+    const soloPendientes = getSoloPendientes();
+    const items = derivarEstadoLista(salida);
+    const itemsAImprimir = soloPendientes ? items.filter(i => !i.comprado) : items;
+
+    if (itemsAImprimir.length === 0) {
+      alert('No hay ítems para imprimir con el filtro seleccionado.');
+      return;
+    }
+
+    const areaPrint = container.querySelector('#seccion-impresion-lista');
+    if (areaPrint) {
+      areaPrint.innerHTML = `
+        <div style="padding: 10px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #000; padding-bottom: 6px;">
+            <div>
+              <h1 style="font-size: 16pt; margin: 0; font-weight: 900; color: #000;">ABASTO - LISTA DE COMPRAS</h1>
+              <div style="font-size: 10pt; color: #333; margin-top: 2px;">
+                Salida: <strong>${escapeHtml(salida.nombre || 'Compra')}</strong> | Fecha: <strong>${formatearFecha(salida.fecha)}</strong>
+              </div>
+            </div>
+            <div style="text-align: right; font-size: 10pt;">
+              <span>${soloPendientes ? 'Solo Pendientes por comprar' : 'Lista Completa'}</span>
+              <div style="font-weight: bold;">${itemsAImprimir.length} productos</div>
+            </div>
+          </div>
+
+          <table class="print-table">
+            <thead>
+              <tr>
+                <th style="width: 35px; text-align: center;">[  ]</th>
+                <th style="width: 70px; text-align: right;">Cant.</th>
+                <th style="width: 90px;">Unidad</th>
+                <th>Producto</th>
+                <th style="width: 140px;">Puesto / Notas</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsAImprimir.map(it => `
+                <tr>
+                  <td style="text-align: center; font-size: 12pt;">${it.comprado ? '☑' : '☐'}</td>
+                  <td style="text-align: right; font-weight: bold;">${it.cantidadPlaneada}</td>
+                  <td>${escapeHtml(it.unidad || 'unidad')}</td>
+                  <td style="font-weight: bold; ${it.comprado ? 'text-decoration: line-through; color: #555;' : ''}">${escapeHtml(it.producto)}</td>
+                  <td style="font-size: 9.5pt; color: #444;">
+                    ${(it.lineasAsociadas || []).map(l => escapeHtml(l.standNombre)).join(', ') || ''}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div style="margin-top: 14px; font-size: 8.5pt; color: #666; text-align: center; border-top: 1px dashed #ccc; padding-top: 6px;">
+            Documento generado para impresión / PDF desde Abasto Bodega PWA
+          </div>
+        </div>
+      `;
+    }
+
+    cerrarModalExportar();
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  });
+
+  // 2. Excel (CSV)
+  container.querySelector('#btn-accion-exportar-excel')?.addEventListener('click', () => {
+    const soloPendientes = getSoloPendientes();
+    exportarCSVListaPlanificada(salida, soloPendientes);
+    cerrarModalExportar();
+  });
+
+  // 3. WhatsApp
+  container.querySelector('#btn-accion-exportar-whatsapp')?.addEventListener('click', async () => {
+    const soloPendientes = getSoloPendientes();
+    await compartirListaWhatsApp(salida, soloPendientes);
+    cerrarModalExportar();
+  });
+
+  // 4. Copiar al Portapapeles
+  container.querySelector('#btn-accion-exportar-copiar')?.addEventListener('click', async () => {
+    const soloPendientes = getSoloPendientes();
+    const texto = generarTextoWhatsAppLista(salida, soloPendientes);
+    const copiado = await copiarTextoPortapapeles(texto);
+    const toast = container.querySelector('#toast-copiado-lista');
+    if (toast) {
+      toast.style.display = 'block';
+      toast.textContent = copiado ? '✓ ¡Lista copiada al portapapeles!' : 'Error al copiar al portapapeles';
+      setTimeout(() => {
+        if (toast) toast.style.display = 'none';
+      }, 2500);
+    }
+  });
+}
+
+function formatearFecha(fechaStr) {
+  if (!fechaStr) return '';
+  const [y, m, d] = fechaStr.split('-');
+  return `${d}/${m}/${y}`;
 }
 
 function escapeHtml(str) {

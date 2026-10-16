@@ -42,7 +42,9 @@ import {
   validarJSONRespaldo,
   procesarImportacionSalidas,
   generarCSVResumen,
-  generarTextoWhatsAppResumen
+  generarTextoWhatsAppResumen,
+  generarCSVListaPlanificada,
+  generarTextoWhatsAppLista
 } from '../js/export.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -573,6 +575,60 @@ test('generarTextoWhatsAppResumen formatea texto legible con emojis y totales ex
   assert.ok(txt.includes('Don Lucho'));
   assert.ok(txt.includes('Harina Anita'));
   assert.ok(txt.includes('S/ 550.00'));
+});
+
+test('generarCSVListaPlanificada exporta CSV con BOM UTF-8 y distingue pendientes vs completa', () => {
+  const salida = crearSalida('Compra Mayorista');
+  const item1 = crearItemPlanificado('Arroz Costeño', 5, 'saco');
+  const item2 = crearItemPlanificado('Azúcar Rubia', 2, 'bolsa');
+  salida.listaPlanificada.push(item1, item2);
+
+  // Simular que Arroz Costeño ya fue comprado en un stand
+  const stand = crearStand('Puesto 12');
+  stand.lineas.push(crearLinea('Arroz Costeño', 5, 'saco', 6000, item1.id));
+  salida.stands.push(stand);
+
+  // 1. Toda la lista
+  const csvCompleto = generarCSVListaPlanificada(salida, false);
+  assert.ok(csvCompleto.startsWith('\uFEFF'), 'Debe incluir BOM UTF-8');
+  assert.ok(csvCompleto.includes('LISTA DE COMPRAS - ABASTO'));
+  assert.ok(csvCompleto.includes('"COMPRADO"'));
+  assert.ok(csvCompleto.includes('"PENDIENTE"'));
+  assert.ok(csvCompleto.includes('"Arroz Costeño"'));
+  assert.ok(csvCompleto.includes('"Azúcar Rubia"'));
+  assert.ok(csvCompleto.includes('"Puesto 12"'));
+
+  // 2. Solo pendientes
+  const csvPendientes = generarCSVListaPlanificada(salida, true);
+  assert.ok(csvPendientes.includes('"PENDIENTE"'));
+  assert.ok(csvPendientes.includes('"Azúcar Rubia"'));
+  assert.ok(!csvPendientes.includes('"COMPRADO"'), 'No debe incluir ítems comprados');
+  assert.ok(!csvPendientes.includes('"Arroz Costeño"'));
+});
+
+test('generarTextoWhatsAppLista formatea lista con casillas [ ] y soporte de pendientes vs todos', () => {
+  const salida = crearSalida('Compra del Día');
+  const item1 = crearItemPlanificado('Aceite Primor', 3, 'caja');
+  const item2 = crearItemPlanificado('Fideos Molitalia', 10, 'bolsa');
+  salida.listaPlanificada.push(item1, item2);
+
+  // Comprar item1
+  const stand = crearStand('Abarrotes Juan');
+  stand.lineas.push(crearLinea('Aceite Primor', 3, 'caja', 18000, item1.id));
+  salida.stands.push(stand);
+
+  // Modo solo pendientes
+  const txtPendientes = generarTextoWhatsAppLista(salida, true);
+  assert.ok(txtPendientes.includes('ABASTO - LISTA DE COMPRAS'));
+  assert.ok(txtPendientes.includes('PENDIENTES POR COMPRAR (1)'));
+  assert.ok(txtPendientes.includes('Fideos Molitalia'));
+  assert.ok(!txtPendientes.includes('YA COMPRADOS'), 'No debe incluir sección de comprados en modo solo pendientes');
+
+  // Modo todos
+  const txtTodos = generarTextoWhatsAppLista(salida, false);
+  assert.ok(txtTodos.includes('PENDIENTES POR COMPRAR (1)'));
+  assert.ok(txtTodos.includes('YA COMPRADOS (1)'));
+  assert.ok(txtTodos.includes('Aceite Primor'));
 });
 
 console.log('\n--- PRUEBAS: INTEGRIDAD DE PRECACHÉ DEL SERVICE WORKER ---');
