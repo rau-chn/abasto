@@ -17,6 +17,7 @@ import {
   calcularSubtotalCentimos,
   describirDiferencia
 } from '../money.js';
+import { compartirStandWhatsApp } from '../export.js';
 
 /**
  * Comprime una imagen a JPEG utilizando HTML5 Canvas nativo.
@@ -106,16 +107,19 @@ export function renderStandView(container, salidaId, standId) {
     <!-- Encabezado del Stand -->
     <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
       <button id="btn-volver-salida" class="btn btn-outline" style="min-height: 40px; padding: 6px 12px; font-size: 0.9rem;">
-        ◀ Volver a Stands
+        ◀ Volver
       </button>
-      <div style="text-align: right; flex: 1;">
-        <span style="font-size: 0.8rem; color: var(--color-text-dim);">
+      <div style="text-align: center; flex: 1; min-width: 0;">
+        <span style="font-size: 0.75rem; color: var(--color-text-dim); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
           ${escapeHtml(salida.nombre || 'Compra')}
         </span>
-        <h2 style="font-size: 1.2rem; font-weight: 800; line-height: 1.2;">
+        <h2 style="font-size: 1.15rem; font-weight: 800; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
           ${escapeHtml(stand.nombre)}
         </h2>
       </div>
+      <button id="btn-whatsapp-stand" class="btn btn-outline" style="min-height: 40px; padding: 6px 10px; font-size: 0.85rem; color: #16a34a; border-color: #16a34a; font-weight: 700; white-space: nowrap;" title="Compartir compra de este stand por WhatsApp">
+        📲 WhatsApp
+      </button>
     </div>
 
     <!-- Tarjeta de Datos y GPS del Stand -->
@@ -1121,13 +1125,16 @@ export function renderStandView(container, salidaId, standId) {
     if (e.target === modalVisor) cerrarVisor();
   });
 
-  // Botones de navegación
   container.querySelector('#btn-volver-salida')?.addEventListener('click', () => {
     window.location.hash = `#salida/${salidaId}`;
   });
 
   container.querySelector('#btn-finalizar-stand')?.addEventListener('click', () => {
     window.location.hash = `#salida/${salidaId}`;
+  });
+
+  container.querySelector('#btn-whatsapp-stand')?.addEventListener('click', async () => {
+    await compartirStandWhatsApp(salida, stand);
   });
 }
 

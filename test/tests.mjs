@@ -44,6 +44,7 @@ import {
   procesarImportacionSalidas,
   generarCSVResumen,
   generarTextoWhatsAppResumen,
+  generarTextoWhatsAppStand,
   generarCSVListaPlanificada,
   generarTextoWhatsAppLista
 } from '../js/export.js';
@@ -601,7 +602,27 @@ test('generarTextoWhatsAppResumen formatea texto legible con emojis y totales ex
   assert.ok(txt.includes('ABASTO - RESUMEN DE COMPRA'));
   assert.ok(txt.includes('Don Lucho'));
   assert.ok(txt.includes('Harina Anita'));
-  assert.ok(txt.includes('S/ 550.00'));
+  assert.ok(txt.includes('• *Harina Anita*: 10 saco x S/ 55.00 = *S/ 550.00*'));
+  assert.ok(!txt.includes('Prom:'), 'No debe incluir la palabra Prom:');
+  assert.ok(!txt.includes('Mín:'), 'No debe incluir la palabra Mín:');
+});
+
+test('generarTextoWhatsAppStand formatea la compra de un stand individual para WhatsApp', () => {
+  const salida = crearSalida('Salida Central');
+  const stand = crearStand('Distribuidora San José', 'Pasaje 4', 'Pedir factura');
+  stand.lineas.push(crearLinea('Arroz Costeño', 2, 'saco', 5000));
+  stand.lineas.push(crearLinea('Aceite Primor', 1, 'caja', 8000));
+  salida.stands.push(stand);
+
+  const txt = generarTextoWhatsAppStand(salida, stand);
+  assert.ok(txt.includes('COMPRA EN STAND'));
+  assert.ok(txt.includes('Distribuidora San José'));
+  assert.ok(txt.includes('Pasaje 4'));
+  assert.ok(txt.includes('Pedir factura'));
+  assert.ok(txt.includes('• *Arroz Costeño*: 2 saco x S/ 50.00 = *S/ 100.00*'));
+  assert.ok(txt.includes('TOTAL STAND: S/ 180.00'));
+  assert.ok(!txt.includes('Prom:'));
+  assert.ok(!txt.includes('Mín:'));
 });
 
 test('generarCSVResumen y generarTextoWhatsAppResumen incluyen sección y totales de viaticos si existen', () => {

@@ -323,7 +323,11 @@ export function generarTextoWhatsAppResumen(salida) {
   texto += `\n*🛒 PRODUCTOS COMPRADOS:*\n`;
 
   for (const g of grupos) {
-    texto += `• *${g.productoNombre}* (${g.cantidadTotal} ${g.unidad}): Prom: ${formatMoney(g.precioPromedioCentimos)} | Mín: ${formatMoney(g.precioMinimoCentimos)} (${g.standsMasBaratos.join(', ')}) | Total: ${formatMoney(g.totalGastadoCentimos)}\n`;
+    if (g.precioMinimoCentimos === g.precioMaximoCentimos) {
+      texto += `• *${g.productoNombre}*: ${g.cantidadTotal} ${g.unidad} x ${formatMoney(g.precioPromedioCentimos)} = *${formatMoney(g.totalGastadoCentimos)}*\n`;
+    } else {
+      texto += `• *${g.productoNombre}*: ${g.cantidadTotal} ${g.unidad} (prom. ${formatMoney(g.precioPromedioCentimos)}) = *${formatMoney(g.totalGastadoCentimos)}*\n`;
+    }
   }
 
   texto += `\n*🏬 TOTAL POR STAND:*\n`;
@@ -376,6 +380,74 @@ export async function compartirResumenWhatsApp(salida) {
   }
 
   // 2. Fallback: Enlace directo a WhatsApp Web / App
+  const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+  window.open(url, '_blank');
+  return true;
+}
+
+/**
+ * Genera el texto formateado para compartir la compra de un stand por WhatsApp.
+ * @param {object} salida
+ * @param {object} stand
+ * @returns {string}
+ */
+export function generarTextoWhatsAppStand(salida, stand) {
+  if (!stand) return '';
+
+  const totStand = calcularTotalesStand(stand);
+  const descStandDiff = describirDiferencia(totStand.diferenciaCentimos);
+  const lineas = Array.isArray(stand.lineas) ? stand.lineas : [];
+
+  let texto = `*🏬 ABASTO - COMPRA EN STAND*\n`;
+  texto += `🏪 Stand: *${stand.nombre || 'Stand sin nombre'}*\n`;
+  if (stand.direccion) texto += `📍 Ubicación: ${stand.direccion}\n`;
+  if (salida && salida.fecha) texto += `📅 Fecha: ${salida.fecha}\n`;
+  if (salida && salida.nombre) texto += `📝 Salida: ${salida.nombre}\n`;
+  if (stand.notas) texto += `📌 Notas: ${stand.notas}\n`;
+
+  texto += `\n*🛒 PRODUCTOS COMPRADOS (${lineas.length}):*\n`;
+  for (const l of lineas) {
+    texto += `• *${l.producto}*: ${l.cantidad} ${l.unidad || 'unidad'} x ${formatMoney(l.precioUnitarioCentimos)} = *${formatMoney(l.subtotalCentimos)}*\n`;
+  }
+
+  if (totStand.tienePagadoReal) {
+    texto += `\nSubtotal calculado: ${formatMoney(totStand.totalCalculadoCentimos)}\n`;
+    if (totStand.diferenciaCentimos !== 0) {
+      texto += `Ajuste / Descuento: ${descStandDiff.texto}\n`;
+    }
+    texto += `💰 *TOTAL PAGADO: ${formatMoney(totStand.totalEfectivoCentimos)}*\n`;
+  } else {
+    texto += `\n💰 *TOTAL STAND: ${formatMoney(totStand.totalCalculadoCentimos)}*\n`;
+  }
+
+  texto += `\n_Generado automáticamente con Abasto Bodega_`;
+  return texto;
+}
+
+/**
+ * Comparte la compra de un stand mediante Web Share API o WhatsApp.
+ * @param {object} salida
+ * @param {object} stand
+ * @returns {Promise<boolean>}
+ */
+export async function compartirStandWhatsApp(salida, stand) {
+  const texto = generarTextoWhatsAppStand(salida, stand);
+  const titulo = `Compra Stand - ${stand.nombre || 'Stand'}`;
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: titulo,
+        text: texto
+      });
+      return true;
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        return false;
+      }
+    }
+  }
+
   const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
   window.open(url, '_blank');
   return true;
