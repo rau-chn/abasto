@@ -173,6 +173,15 @@ test('normalizarUnidad utiliza tabla cerrada de equivalencias para agrupar singu
   assert.strictEqual(normalizarUnidad('cilindro'), 'cilindro');
 });
 
+test('crearStand inicializa comprobante en null o almacena la imagen Base64 provista', () => {
+  const stand1 = crearStand('Puesto 5');
+  assert.strictEqual(stand1.comprobante, null);
+
+  const fakeDataUrl = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ...';
+  const stand2 = crearStand('Puesto 6', 'Pasaje 3', 'Nota', fakeDataUrl);
+  assert.strictEqual(stand2.comprobante, fakeDataUrl);
+});
+
 test('calcularTotalesStand calcula total calculado, total efectivo y diferencia', () => {
   const stand = crearStand('Puesto 10');
   stand.lineas.push(crearLinea('Aceite', 2, 'caja', 15000));

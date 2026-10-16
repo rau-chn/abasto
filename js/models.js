@@ -173,9 +173,10 @@ export function crearSalida(nombre = '', fecha = null) {
  * @param {string} nombre - Nombre del stand (ej. "Puesto 12 - Don Lucho")
  * @param {string} [direccion=''] - Dirección en texto libre
  * @param {string} [notas=''] - Notas opcionales
+ * @param {string|null} [comprobante=null] - Imagen en Base64 o URL del comprobante/boleta
  * @returns {object}
  */
-export function crearStand(nombre, direccion = '', notas = '') {
+export function crearStand(nombre, direccion = '', notas = '', comprobante = null) {
   return {
     id: crearId(),
     nombre: (nombre || '').trim(),
@@ -183,6 +184,7 @@ export function crearStand(nombre, direccion = '', notas = '') {
     notas: (notas || '').trim(),
     ubicacion: null, // { lat: number, lng: number, timestamp: number } (sin mapsUrl guardado)
     totalPagadoRealCentimos: null,
+    comprobante: comprobante || null,
     lineas: []
   };
 }

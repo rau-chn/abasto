@@ -258,6 +258,7 @@ export function renderResumenView(container, salidaId) {
                         <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--color-text);">
                           ${escapeHtml(stand.nombre)}
                         </h3>
+                        ${stand.comprobante ? '<span class="badge badge-success" style="font-size: 0.7rem; padding: 2px 6px;">🧾 Boleta</span>' : ''}
                       </div>
                       ${stand.direccion ? `
                         <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-top: 2px;">
@@ -267,6 +268,13 @@ export function renderResumenView(container, salidaId) {
                       ${stand.notas ? `
                         <div style="font-size: 0.8rem; color: var(--color-text-dim); margin-top: 2px;">
                           📝 ${escapeHtml(stand.notas)}
+                        </div>
+                      ` : ''}
+                      ${stand.comprobante ? `
+                        <div style="margin-top: 6px;">
+                          <button type="button" class="btn btn-outline" style="min-height: 30px; padding: 2px 8px; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;" data-action="ver-comprobante-resumen" data-stand-id="${stand.id}">
+                            🔍 Ver foto de boleta
+                          </button>
                         </div>
                       ` : ''}
                     </div>
@@ -421,6 +429,32 @@ export function renderResumenView(container, salidaId) {
         * La diferencia de stands se refleja en el total final y no se reparte entre los precios individuales de los productos.
       </p>
     </div>
+
+    <!-- Modal Visor de Comprobante en Resumen -->
+    <div id="modal-resumen-comprobante" class="modal-overlay" style="display: none;">
+      <div class="modal-content" style="max-width: 600px; padding: 14px; max-height: 95vh; display: flex; flex-direction: column;" onclick="event.stopPropagation();">
+        <div class="modal-header" style="margin-bottom: 8px;">
+          <div>
+            <h3 class="modal-title" style="font-size: 1.1rem;">Comprobante de compra</h3>
+            <span id="resumen-modal-subtitulo" style="font-size: 0.8rem; color: var(--color-text-dim);"></span>
+          </div>
+          <button id="btn-cerrar-resumen-visor" class="btn-icon" style="font-size: 1.2rem;">✕</button>
+        </div>
+
+        <div style="flex: 1; overflow: auto; text-align: center; background: #000000; border-radius: var(--radius-sm); min-height: 250px; display: flex; align-items: center; justify-content: center; padding: 4px;">
+          <img id="img-resumen-comprobante" src="" alt="Foto boleta" style="max-width: 100%; max-height: 65vh; object-fit: contain; border-radius: 4px;" />
+        </div>
+
+        <div class="modal-actions" style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+          <a id="btn-descargar-resumen-comprobante" href="#" download="comprobante.jpg" class="btn btn-outline" style="min-height: 40px; padding: 4px 12px; font-size: 0.85rem; text-decoration: none;">
+            ⬇️ Descargar foto
+          </a>
+          <button id="btn-cerrar-resumen-footer" class="btn btn-primary" style="min-height: 40px; padding: 4px 16px;">
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
   `;
 
   container.innerHTML = html;
@@ -501,6 +535,39 @@ export function renderResumenView(container, salidaId) {
         expandidos.add(clave);
       }
       renderResumenView(container, salidaId);
+    });
+  });
+
+  // Visor de foto de comprobante en Resumen
+  const modalResumenVisor = container.querySelector('#modal-resumen-comprobante');
+  const imgResumenComprobante = container.querySelector('#img-resumen-comprobante');
+  const tituloResumenVisor = container.querySelector('#resumen-modal-subtitulo');
+  const btnDescargarResumen = container.querySelector('#btn-descargar-resumen-comprobante');
+
+  const cerrarResumenVisor = () => {
+    if (modalResumenVisor) modalResumenVisor.style.display = 'none';
+  };
+
+  container.querySelector('#btn-cerrar-resumen-visor')?.addEventListener('click', cerrarResumenVisor);
+  container.querySelector('#btn-cerrar-resumen-footer')?.addEventListener('click', cerrarResumenVisor);
+  modalResumenVisor?.addEventListener('click', (e) => {
+    if (e.target === modalResumenVisor) cerrarResumenVisor();
+  });
+
+  container.querySelectorAll('[data-action="ver-comprobante-resumen"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const stId = btn.dataset.standId;
+      const targetStand = (stands || []).find(s => s.id === stId);
+      if (!targetStand || !targetStand.comprobante) return;
+
+      if (imgResumenComprobante) imgResumenComprobante.src = targetStand.comprobante;
+      if (tituloResumenVisor) tituloResumenVisor.textContent = targetStand.nombre;
+      if (btnDescargarResumen) {
+        btnDescargarResumen.href = targetStand.comprobante;
+        btnDescargarResumen.download = `comprobante-${targetStand.nombre.toLowerCase().replace(/[^a-z0-9]/g, '_')}.jpg`;
+      }
+      if (modalResumenVisor) modalResumenVisor.style.display = 'flex';
     });
   });
 }

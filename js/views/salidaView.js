@@ -89,9 +89,10 @@ export function renderSalidaView(container, salidaId) {
                     </div>
                   ` : ''}
 
-                  <div style="font-size: 0.85rem; color: var(--color-text-dim); margin-top: 4px;">
-                    ${numLineas} ${numLineas === 1 ? 'producto registrado' : 'productos registrados'}
-                    ${stand.ubicacion ? '· 📌 GPS guardado' : ''}
+                  <div style="font-size: 0.85rem; color: var(--color-text-dim); margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <span>${numLineas} ${numLineas === 1 ? 'producto registrado' : 'productos registrados'}</span>
+                    ${stand.ubicacion ? '<span>· 📌 GPS</span>' : ''}
+                    ${stand.comprobante ? '<span class="badge badge-success" style="font-size: 0.7rem; padding: 1px 6px;">🧾 Boleta</span>' : ''}
                   </div>
                 </div>
 

@@ -18,6 +18,66 @@ import {
   describirDiferencia
 } from '../money.js';
 
+/**
+ * Comprime una imagen a JPEG utilizando HTML5 Canvas nativo.
+ * Reduce resolución manteniendo proporción a un máximo de 1200px y calidad ~75%.
+ * Esto reduce una foto de cámara de 5-10 MB a unos 80-150 KB para no saturar IndexedDB ni los respaldos JSON.
+ * @param {File} file
+ * @param {number} [maxDim=1200]
+ * @param {number} [calidad=0.75]
+ * @returns {Promise<string>} Data URL base64
+ */
+export function comprimirImagen(file, maxDim = 1200, calidad = 0.75) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith('image/')) {
+      return reject(new Error('El archivo seleccionado no es una imagen válida.'));
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Error al leer el archivo de imagen.'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Error al cargar la imagen.'));
+      img.onload = () => {
+        let width = img.naturalWidth || img.width;
+        let height = img.naturalHeight || img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return reject(new Error('No se pudo inicializar el procesador gráfico.'));
+        }
+
+        // Fondo blanco para evitar fondos negros si era PNG transparente
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        try {
+          const dataUrl = canvas.toDataURL('image/jpeg', calidad);
+          resolve(dataUrl);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export function renderStandView(container, salidaId, standId) {
   const state = getState();
   const salida = (state.salidas || []).find(s => s.id === salidaId);
@@ -81,6 +141,71 @@ export function renderStandView(container, salidaId, standId) {
           <span style="font-size: 0.8rem; color: var(--color-text-dim);">Sin GPS</span>
         `}
       </div>
+    </div>
+
+    <!-- Tarjeta de Comprobante / Boleta del Stand -->
+    <div class="card" style="padding: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <h3 style="font-size: 0.95rem; font-weight: 800; color: var(--color-text-muted); text-transform: uppercase;">
+          🧾 Foto de Boleta / Comprobante
+        </h3>
+        ${stand.comprobante ? `
+          <span class="badge badge-success" style="font-size: 0.75rem;">Adjunta</span>
+        ` : `
+          <span style="font-size: 0.8rem; color: var(--color-text-dim);">Opcional</span>
+        `}
+      </div>
+
+      <!-- Inputs ocultos para captura por cámara o archivo -->
+      <input type="file" id="input-camara-comprobante" accept="image/*" capture="environment" style="display: none;" />
+      <input type="file" id="input-archivo-comprobante" accept="image/*" style="display: none;" />
+
+      <div id="comprobante-estado" style="display: none; padding: 8px; margin-bottom: 8px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; background: var(--color-warning-bg); color: var(--color-warning); text-align: center;">
+      </div>
+
+      ${stand.comprobante ? `
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <!-- Miniatura interactiva con zoom -->
+          <div id="btn-ver-miniatura" style="position: relative; width: 85px; height: 85px; border-radius: var(--radius-sm); overflow: hidden; border: 2px solid var(--color-border); cursor: pointer; flex-shrink: 0; background: #000000;" title="Toca para ver en pantalla completa">
+            <img src="${stand.comprobante}" alt="Comprobante de compra" style="width: 100%; height: 100%; object-fit: cover;" />
+            <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.25rem;">
+              🔍
+            </div>
+          </div>
+
+          <!-- Acciones de comprobante -->
+          <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
+            <button type="button" id="btn-abrir-visor" class="btn btn-outline" style="min-height: 36px; padding: 4px 10px; font-size: 0.85rem; justify-content: flex-start;">
+              🔍 Ver foto completa
+            </button>
+            <div style="display: flex; gap: 6px;">
+              <button type="button" id="btn-cambiar-camara" class="btn btn-outline" style="min-height: 36px; padding: 4px 8px; font-size: 0.8rem; flex: 1;" title="Tomar nueva foto con cámara">
+                📷 Cámara
+              </button>
+              <button type="button" id="btn-cambiar-archivo" class="btn btn-outline" style="min-height: 36px; padding: 4px 8px; font-size: 0.8rem; flex: 1;" title="Elegir otra imagen o archivo">
+                📁 Archivo
+              </button>
+              <button type="button" id="btn-eliminar-comprobante" class="btn btn-danger-outline btn-icon" style="min-height: 36px; width: 36px;" title="Eliminar foto">
+                🗑️
+              </button>
+            </div>
+          </div>
+        </div>
+      ` : `
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <p style="font-size: 0.85rem; color: var(--color-text-dim);">
+            Toma foto a la boleta, factura o ticket para tener respaldo visual de tu compra en este stand.
+          </p>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" id="btn-tomar-foto" class="btn btn-outline" style="flex: 1; min-height: 42px; font-size: 0.9rem; font-weight: 700;">
+              📷 Tomar foto
+            </button>
+            <button type="button" id="btn-subir-archivo" class="btn btn-outline" style="flex: 1; min-height: 42px; font-size: 0.9rem; font-weight: 700;">
+              📁 Elegir archivo
+            </button>
+          </div>
+        </div>
+      `}
     </div>
 
     <!-- Formulario Rápido: AGREGAR PRODUCTO (Optimizado para 1 mano y < 1 minuto) -->
@@ -327,6 +452,32 @@ export function renderStandView(container, salidaId, standId) {
         <div class="modal-actions" style="margin-top: 10px;">
           <button id="btn-cancelar-edit-linea" class="btn btn-outline">Cancelar</button>
           <button id="btn-guardar-edit-linea" class="btn btn-primary">Guardar Cambios</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Visor de Comprobante / Boleta en pantalla completa -->
+    <div id="modal-visor-comprobante" class="modal-overlay" style="display: none;">
+      <div class="modal-content" style="max-width: 600px; padding: 14px; max-height: 95vh; display: flex; flex-direction: column;" onclick="event.stopPropagation();">
+        <div class="modal-header" style="margin-bottom: 8px;">
+          <div>
+            <h3 class="modal-title" style="font-size: 1.1rem;">Comprobante de compra</h3>
+            <span style="font-size: 0.8rem; color: var(--color-text-dim);">${escapeHtml(stand.nombre)}</span>
+          </div>
+          <button id="btn-cerrar-visor" class="btn-icon" style="font-size: 1.2rem;">✕</button>
+        </div>
+
+        <div style="flex: 1; overflow: auto; text-align: center; background: #000000; border-radius: var(--radius-sm); min-height: 250px; display: flex; align-items: center; justify-content: center; padding: 4px;">
+          <img id="img-visor-comprobante" src="${stand.comprobante || ''}" alt="Foto boleta" style="max-width: 100%; max-height: 65vh; object-fit: contain; border-radius: 4px;" />
+        </div>
+
+        <div class="modal-actions" style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+          <a id="btn-descargar-comprobante" href="${stand.comprobante || '#'}" download="comprobante-${escapeHtml(stand.nombre).toLowerCase().replace(/[^a-z0-9]/g, '_')}.jpg" class="btn btn-outline" style="min-height: 40px; padding: 4px 12px; font-size: 0.85rem; text-decoration: none;">
+            ⬇️ Descargar foto
+          </a>
+          <button id="btn-cerrar-visor-footer" class="btn btn-primary" style="min-height: 40px; padding: 4px 16px;">
+            Cerrar
+          </button>
         </div>
       </div>
     </div>
@@ -691,6 +842,82 @@ export function renderStandView(container, salidaId, standId) {
 
     await actualizarLineaAction(salidaId, standId, mod);
     cerrarModalEdit();
+  });
+
+  // Gestión de Foto de Comprobante / Boleta
+  const inputCamara = container.querySelector('#input-camara-comprobante');
+  const inputArchivo = container.querySelector('#input-archivo-comprobante');
+  const estadoComprobante = container.querySelector('#comprobante-estado');
+
+  const procesarFotoSeleccionada = async (file) => {
+    if (!file) return;
+    if (estadoComprobante) {
+      estadoComprobante.style.display = 'block';
+      estadoComprobante.textContent = '⏳ Optimizando y guardando foto del comprobante...';
+    }
+    try {
+      const dataUrl = await comprimirImagen(file, 1200, 0.75);
+      const mod = {
+        ...stand,
+        nombre: inputStandNombre?.value.trim() || stand.nombre,
+        direccion: inputStandDireccion?.value.trim() ?? (stand.direccion || ''),
+        notas: inputStandNotas?.value.trim() ?? (stand.notas || ''),
+        comprobante: dataUrl
+      };
+      await actualizarStandAction(salidaId, mod);
+    } catch (err) {
+      alert('No se pudo procesar la foto: ' + (err.message || err));
+      if (estadoComprobante) {
+        estadoComprobante.style.display = 'none';
+      }
+    }
+  };
+
+  inputCamara?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) procesarFotoSeleccionada(file);
+    e.target.value = '';
+  });
+
+  inputArchivo?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) procesarFotoSeleccionada(file);
+    e.target.value = '';
+  });
+
+  container.querySelector('#btn-tomar-foto')?.addEventListener('click', () => inputCamara?.click());
+  container.querySelector('#btn-subir-archivo')?.addEventListener('click', () => inputArchivo?.click());
+  container.querySelector('#btn-cambiar-camara')?.addEventListener('click', () => inputCamara?.click());
+  container.querySelector('#btn-cambiar-archivo')?.addEventListener('click', () => inputArchivo?.click());
+
+  container.querySelector('#btn-eliminar-comprobante')?.addEventListener('click', async () => {
+    if (confirm('¿Eliminar la foto del comprobante de este stand?')) {
+      const mod = {
+        ...stand,
+        nombre: inputStandNombre?.value.trim() || stand.nombre,
+        direccion: inputStandDireccion?.value.trim() ?? (stand.direccion || ''),
+        notas: inputStandNotas?.value.trim() ?? (stand.notas || ''),
+        comprobante: null
+      };
+      await actualizarStandAction(salidaId, mod);
+    }
+  });
+
+  // Visor de foto en pantalla completa
+  const modalVisor = container.querySelector('#modal-visor-comprobante');
+  const abrirVisor = () => {
+    if (modalVisor) modalVisor.style.display = 'flex';
+  };
+  const cerrarVisor = () => {
+    if (modalVisor) modalVisor.style.display = 'none';
+  };
+
+  container.querySelector('#btn-ver-miniatura')?.addEventListener('click', abrirVisor);
+  container.querySelector('#btn-abrir-visor')?.addEventListener('click', abrirVisor);
+  container.querySelector('#btn-cerrar-visor')?.addEventListener('click', cerrarVisor);
+  container.querySelector('#btn-cerrar-visor-footer')?.addEventListener('click', cerrarVisor);
+  modalVisor?.addEventListener('click', (e) => {
+    if (e.target === modalVisor) cerrarVisor();
   });
 
   // Botones de navegación
