@@ -219,14 +219,34 @@ export function renderStandView(container, salidaId, standId) {
         </span>
       </div>
 
-      <!-- Atajo para elegir de la lista planificada -->
+      <!-- Atajo y buscador de la lista planificada -->
       ${itemsPendientes.length > 0 ? `
-        <div style="background-color: var(--color-warning-bg); border: 1px solid var(--color-warning); border-radius: var(--radius-sm); padding: 8px 10px;">
-          <div style="font-size: 0.8rem; font-weight: 800; color: var(--color-warning); text-transform: uppercase; margin-bottom: 4px;">
-            📋 De tu lista (${itemsPendientes.length} pendientes):
+        <div style="background-color: var(--color-warning-bg); border: 1.5px solid var(--color-warning); border-radius: var(--radius-sm); padding: 10px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.8rem; font-weight: 800; color: var(--color-warning); text-transform: uppercase;">
+              📋 De tu lista (${itemsPendientes.length} pendientes)
+            </span>
+            <span style="font-size: 0.75rem; color: var(--color-text-dim);">Toca para autollenar</span>
           </div>
-          <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; -webkit-overflow-scrolling: touch;">
-            ${itemsPendientes.map(item => `
+
+          <!-- Botón Buscador Principal para abrir el selector -->
+          <button
+            type="button"
+            id="btn-abrir-selector-pendientes"
+            class="btn btn-outline"
+            style="width: 100%; min-height: 44px; background: var(--color-surface); font-size: 0.9rem; font-weight: 700; display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1.5px solid var(--color-warning); box-shadow: var(--shadow-sm);"
+          >
+            <span style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 1.1rem;">🔍</span>
+              <span style="color: var(--color-text);">Buscar en los ${itemsPendientes.length} pendientes...</span>
+            </span>
+            <span style="color: var(--color-warning); font-size: 1.2rem; font-weight: 800;">▾</span>
+          </button>
+
+          <!-- Atajos rápidos horizontales -->
+          <div style="display: flex; gap: 6px; align-items: center; overflow-x: auto; padding-bottom: 2px; -webkit-overflow-scrolling: touch;">
+            <span style="font-size: 0.75rem; font-weight: 700; color: var(--color-text-dim); white-space: nowrap;">Atajos:</span>
+            ${itemsPendientes.slice(0, 5).map(item => `
               <button
                 type="button"
                 class="btn btn-outline btn-item-plan-chip"
@@ -234,11 +254,21 @@ export function renderStandView(container, salidaId, standId) {
                 data-item-nombre="${escapeHtml(item.producto)}"
                 data-item-cant="${item.cantidadPlaneada}"
                 data-item-unid="${escapeHtml(item.unidad || 'unidad')}"
-                style="min-height: 32px; padding: 2px 8px; font-size: 0.8rem; background: var(--color-surface); white-space: nowrap; flex-shrink: 0;"
+                style="min-height: 30px; padding: 2px 8px; font-size: 0.78rem; background: var(--color-surface); white-space: nowrap; flex-shrink: 0;"
               >
                 ${escapeHtml(item.producto)} (${item.cantidadPlaneada} ${escapeHtml(item.unidad || 'und')})
               </button>
             `).join('')}
+            ${itemsPendientes.length > 5 ? `
+              <button
+                type="button"
+                id="btn-ver-mas-pendientes"
+                class="btn btn-outline"
+                style="min-height: 30px; padding: 2px 8px; font-size: 0.78rem; background: var(--color-surface); color: var(--color-primary); font-weight: 800; white-space: nowrap; flex-shrink: 0;"
+              >
+                +${itemsPendientes.length - 5} más ➔
+              </button>
+            ` : ''}
           </div>
         </div>
       ` : ''}
@@ -481,6 +511,50 @@ export function renderStandView(container, salidaId, standId) {
         </div>
       </div>
     </div>
+
+    <!-- MODAL: Selector Rápido de Productos Pendientes de la Lista -->
+    <div id="modal-selector-pendientes" class="modal-overlay" style="display: none;">
+      <div class="modal-content" style="max-width: 520px; max-height: 90vh; display: flex; flex-direction: column; padding: 14px;" onclick="event.stopPropagation();">
+        <div class="modal-header" style="margin-bottom: 6px;">
+          <div>
+            <h3 class="modal-title" style="font-size: 1.15rem;">📋 Productos Pendientes</h3>
+            <span id="contador-modal-pendientes" style="font-size: 0.8rem; color: var(--color-text-dim);">
+              ${itemsPendientes.length} productos por comprar
+            </span>
+          </div>
+          <button id="btn-cerrar-modal-pendientes" class="btn-icon" style="font-size: 1.2rem;">✕</button>
+        </div>
+
+        <!-- Buscador dentro del modal -->
+        <div style="position: relative; margin-bottom: 8px;">
+          <input
+            type="search"
+            id="input-filtro-pendientes-modal"
+            class="form-input"
+            placeholder="🔍 Escribe para buscar (ej. arroz, azucar, aceite)..."
+            autocomplete="off"
+            style="padding-left: 36px; padding-right: 32px; min-height: 44px; font-size: 0.95rem; font-weight: 600;"
+          />
+          <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 1.1rem; pointer-events: none;">🔍</span>
+          <button
+            type="button"
+            id="btn-limpiar-filtro-pendientes"
+            style="display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; font-size: 1.1rem; color: var(--color-text-dim); cursor: pointer; padding: 4px;"
+            title="Borrar texto"
+          >✕</button>
+        </div>
+
+        <!-- Contenedor scrollable de la lista filtrable -->
+        <div id="lista-pendientes-modal-contenedor" style="flex: 1; overflow-y: auto; max-height: 55vh; display: flex; flex-direction: column; gap: 6px; padding-right: 2px;">
+        </div>
+
+        <div class="modal-actions" style="margin-top: 8px;">
+          <button id="btn-cerrar-modal-pendientes-footer" class="btn btn-outline" style="width: 100%;">
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
   `;
 
   container.innerHTML = html;
@@ -636,29 +710,156 @@ export function renderStandView(container, salidaId, standId) {
   };
   btnDesvincularPlan?.addEventListener('click', desvincularPlan);
 
+  const seleccionarItemPlanificado = (item) => {
+    if (!item) return;
+    selectedListaItemId = item.id;
+    inputProdNombre.value = item.producto;
+    inputProdCantidad.value = item.cantidadPlaneada;
+    inputProdUnidad.value = item.unidad || 'unidad';
+    actualizarChipsActivos();
+
+    const valNorm = normalizarTexto(item.producto);
+    const prodEncontrado = catalogo.productos.find(p => normalizarTexto(p.nombre) === valNorm);
+    if (prodEncontrado && prodEncontrado.ultimoPrecioCentimos) {
+      inputProdPrecio.value = centimosToSoles(prodEncontrado.ultimoPrecioCentimos);
+    } else {
+      inputProdPrecio.value = '';
+    }
+
+    actualizarPreviewSubtotal();
+    if (indicadorPlan && textoEnlacePlan) {
+      textoEnlacePlan.textContent = `✓ Enlazado a lista: ${item.producto}`;
+      indicadorPlan.style.display = 'flex';
+    }
+    inputProdPrecio.focus();
+    inputProdPrecio.select();
+  };
+
   container.querySelectorAll('.btn-item-plan-chip').forEach(btn => {
     btn.addEventListener('click', () => {
-      selectedListaItemId = btn.dataset.itemId;
-      inputProdNombre.value = btn.dataset.itemNombre;
-      inputProdCantidad.value = btn.dataset.itemCant;
-      inputProdUnidad.value = btn.dataset.itemUnid;
-      actualizarChipsActivos();
-
-      const valNorm = normalizarTexto(btn.dataset.itemNombre);
-      const prodEncontrado = catalogo.productos.find(p => normalizarTexto(p.nombre) === valNorm);
-      if (prodEncontrado && prodEncontrado.ultimoPrecioCentimos) {
-        inputProdPrecio.value = centimosToSoles(prodEncontrado.ultimoPrecioCentimos);
-      } else {
-        inputProdPrecio.value = '';
-      }
-
-      actualizarPreviewSubtotal();
-      if (indicadorPlan && textoEnlacePlan) {
-        textoEnlacePlan.textContent = `✓ Enlazado a lista: ${btn.dataset.itemNombre}`;
-        indicadorPlan.style.display = 'flex';
-      }
-      inputProdPrecio.focus();
+      const itemId = btn.dataset.itemId;
+      const item = itemsPendientes.find(i => i.id === itemId);
+      if (item) seleccionarItemPlanificado(item);
     });
+  });
+
+  // Selector y buscador de pendientes en modal
+  const modalSelectorPendientes = container.querySelector('#modal-selector-pendientes');
+  const inputFiltroModal = container.querySelector('#input-filtro-pendientes-modal');
+  const btnLimpiarFiltroModal = container.querySelector('#btn-limpiar-filtro-pendientes');
+  const contenedorPendientesModal = container.querySelector('#lista-pendientes-modal-contenedor');
+  const contadorModalPendientes = container.querySelector('#contador-modal-pendientes');
+
+  const renderizarListaPendientesModal = (filtro = '') => {
+    if (!contenedorPendientesModal) return;
+    const filtroNorm = normalizarTexto(filtro);
+    const filtrados = filtroNorm
+      ? itemsPendientes.filter(it => {
+          const pNorm = normalizarTexto(it.producto);
+          const uNorm = normalizarTexto(it.unidad || '');
+          return pNorm.includes(filtroNorm) || uNorm.includes(filtroNorm);
+        })
+      : itemsPendientes;
+
+    if (contadorModalPendientes) {
+      contadorModalPendientes.textContent = filtroNorm
+        ? `Mostrando ${filtrados.length} de ${itemsPendientes.length} pendientes`
+        : `${itemsPendientes.length} productos por comprar`;
+    }
+
+    if (btnLimpiarFiltroModal) {
+      btnLimpiarFiltroModal.style.display = filtro.trim() ? 'block' : 'none';
+    }
+
+    if (filtrados.length === 0) {
+      contenedorPendientesModal.innerHTML = `
+        <div style="text-align: center; padding: 24px 8px; color: var(--color-text-dim);">
+          <p style="font-size: 1.6rem; margin-bottom: 4px;">🔍</p>
+          <p style="font-weight: 700; color: var(--color-text);">No hay productos con "${escapeHtml(filtro)}"</p>
+          <p style="font-size: 0.8rem; margin-top: 2px;">Prueba con otra palabra o escribe el producto en el formulario.</p>
+        </div>
+      `;
+      return;
+    }
+
+    contenedorPendientesModal.innerHTML = filtrados.map(item => `
+      <button
+        type="button"
+        class="btn btn-outline btn-fila-pendiente"
+        data-item-id="${item.id}"
+        style="min-height: 48px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; text-align: left; background: var(--color-surface); border: 1.5px solid var(--color-border); border-radius: var(--radius-sm); cursor: pointer; transition: background 0.15s;"
+      >
+        <div style="flex: 1; min-width: 0; padding-right: 8px;">
+          <div style="font-weight: 800; font-size: 0.95rem; color: var(--color-text); word-break: break-word;">
+            ${escapeHtml(item.producto)}
+          </div>
+          <div style="font-size: 0.8rem; color: var(--color-text-dim); margin-top: 2px;">
+            Planeado: <strong style="color: var(--color-primary);">${item.cantidadPlaneada} ${escapeHtml(item.unidad || 'unidad')}</strong>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+          <span class="badge badge-warning" style="font-size: 0.75rem; font-weight: 800;">
+            ${item.cantidadPlaneada} ${escapeHtml(item.unidad || 'und')}
+          </span>
+          <span style="font-size: 1.1rem; color: var(--color-primary); font-weight: 800;">➔</span>
+        </div>
+      </button>
+    `).join('');
+
+    contenedorPendientesModal.querySelectorAll('.btn-fila-pendiente').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const itemId = btn.dataset.itemId;
+        const item = itemsPendientes.find(i => i.id === itemId);
+        if (item) {
+          seleccionarItemPlanificado(item);
+          cerrarModalSelectorPendientes();
+        }
+      });
+    });
+  };
+
+  const abrirModalSelectorPendientes = () => {
+    if (!modalSelectorPendientes) return;
+    if (inputFiltroModal) inputFiltroModal.value = '';
+    renderizarListaPendientesModal('');
+    modalSelectorPendientes.style.display = 'flex';
+    setTimeout(() => {
+      if (inputFiltroModal) inputFiltroModal.focus();
+    }, 60);
+  };
+
+  const cerrarModalSelectorPendientes = () => {
+    if (modalSelectorPendientes) modalSelectorPendientes.style.display = 'none';
+  };
+
+  container.querySelector('#btn-abrir-selector-pendientes')?.addEventListener('click', abrirModalSelectorPendientes);
+  container.querySelector('#btn-ver-mas-pendientes')?.addEventListener('click', abrirModalSelectorPendientes);
+  container.querySelector('#btn-cerrar-modal-pendientes')?.addEventListener('click', cerrarModalSelectorPendientes);
+  container.querySelector('#btn-cerrar-modal-pendientes-footer')?.addEventListener('click', cerrarModalSelectorPendientes);
+  modalSelectorPendientes?.addEventListener('click', (e) => {
+    if (e.target === modalSelectorPendientes) cerrarModalSelectorPendientes();
+  });
+
+  inputFiltroModal?.addEventListener('input', (e) => {
+    renderizarListaPendientesModal(e.target.value);
+  });
+
+  inputFiltroModal?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const primeraFila = contenedorPendientesModal?.querySelector('.btn-fila-pendiente');
+      if (primeraFila) {
+        primeraFila.click();
+      }
+    }
+  });
+
+  btnLimpiarFiltroModal?.addEventListener('click', () => {
+    if (inputFiltroModal) {
+      inputFiltroModal.value = '';
+      inputFiltroModal.focus();
+      renderizarListaPendientesModal('');
+    }
   });
 
   // Agregar línea (Enter o Clic)
