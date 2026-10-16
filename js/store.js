@@ -5,7 +5,7 @@
  */
 
 import * as db from './db.js';
-import { deducirCatalogo, crearSalida, crearStand, crearLinea, crearItemPlanificado } from './models.js';
+import { deducirCatalogo, crearSalida, crearStand, crearLinea, crearItemPlanificado, crearGasto } from './models.js';
 
 const state = {
   salidas: [],
@@ -423,6 +423,57 @@ export async function limpiarListaPlanificadaAction(salidaId) {
   if (!salida) return;
 
   salida.listaPlanificada = [];
+  await db.saveSalida(salida);
+  notify();
+}
+
+/**
+ * Agrega un gasto operativo o viático a una salida.
+ * @param {string} salidaId
+ * @param {{ descripcion: string, montoCentimos: number, categoria?: string }} gastoData
+ * @returns {Promise<object>}
+ */
+export async function agregarGastoAction(salidaId, gastoData) {
+  const salida = state.salidas.find(s => s.id === salidaId);
+  if (!salida) throw new Error('Salida no encontrada');
+
+  const nuevoGasto = crearGasto(gastoData.descripcion, gastoData.montoCentimos, gastoData.categoria);
+  if (!Array.isArray(salida.gastos)) salida.gastos = [];
+  salida.gastos.push(nuevoGasto);
+
+  await db.saveSalida(salida);
+  notify();
+  return nuevoGasto;
+}
+
+/**
+ * Actualiza un gasto existente en una salida.
+ * @param {string} salidaId
+ * @param {object} gastoModificado
+ */
+export async function actualizarGastoAction(salidaId, gastoModificado) {
+  const salida = state.salidas.find(s => s.id === salidaId);
+  if (!salida) return;
+
+  if (!Array.isArray(salida.gastos)) salida.gastos = [];
+  const idx = salida.gastos.findIndex(g => g.id === gastoModificado.id);
+  if (idx !== -1) {
+    salida.gastos[idx] = gastoModificado;
+    await db.saveSalida(salida);
+    notify();
+  }
+}
+
+/**
+ * Elimina un gasto de una salida.
+ * @param {string} salidaId
+ * @param {string} gastoId
+ */
+export async function eliminarGastoAction(salidaId, gastoId) {
+  const salida = state.salidas.find(s => s.id === salidaId);
+  if (!salida) return;
+
+  salida.gastos = (salida.gastos || []).filter(g => g.id !== gastoId);
   await db.saveSalida(salida);
   notify();
 }

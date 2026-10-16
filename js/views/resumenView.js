@@ -14,6 +14,19 @@ import {
 import { formatMoney, centimosToSoles, describirDiferencia } from '../money.js';
 import { exportarCSVResumen, compartirResumenWhatsApp } from '../export.js';
 
+const CATEGORIAS_GASTO = [
+  { id: 'pasajes', label: 'Pasajes / Taxi', icon: '🚗' },
+  { id: 'comida', label: 'Comida / Refrigerio', icon: '🍔' },
+  { id: 'estibador', label: 'Estibador', icon: '💪' },
+  { id: 'flete', label: 'Flete / Carga', icon: '🚚' },
+  { id: 'cochera', label: 'Cochera / Peaje', icon: '🅿️' },
+  { id: 'otro', label: 'Otro gasto', icon: '🏷️' }
+];
+
+function getCategoriaInfo(catId) {
+  return CATEGORIAS_GASTO.find(c => c.id === catId) || { id: 'otro', label: 'Otro gasto', icon: '🏷️' };
+}
+
 let vistaActiva = 'general'; // 'general' | 'stands'
 let ordenActivo = 'gasto';   // 'gasto' | 'nombre'
 let busquedaFiltro = '';
@@ -39,6 +52,7 @@ export function renderResumenView(container, salidaId) {
   const totalesSalida = calcularTotalesSalida(salida);
   const descDiff = describirDiferencia(totalesSalida.diferenciaCentimos);
   const stands = Array.isArray(salida.stands) ? salida.stands : [];
+  const gastos = Array.isArray(salida.gastos) ? salida.gastos : [];
   const gruposProductos = agruparPorProductoYUnidad(salida);
   const itemsPlanificados = derivarEstadoLista(salida);
   const compradosCount = itemsPlanificados.filter(i => i.comprado).length;
@@ -415,18 +429,48 @@ export function renderResumenView(container, salidaId) {
         </div>
       ` : ''}
 
-      <!-- 3. Total final pagado -->
-      <div style="display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0 2px 0; border-top: 2px solid var(--color-border); margin-top: 6px;">
-        <span style="font-size: 1.1rem; font-weight: 900; color: var(--color-text);">
-          TOTAL FINAL PAGADO:
+      <!-- 3. Total pagado en stands (Mercadería) -->
+      <div style="display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--color-border); margin-top: 4px;">
+        <span style="font-size: 0.95rem; font-weight: 800; color: var(--color-text);">
+          Total pagado en Stands (Mercadería):
         </span>
-        <span style="font-size: 1.5rem; font-weight: 900; color: var(--color-primary); font-variant-numeric: tabular-nums;">
+        <span style="font-size: 1.15rem; font-weight: 800; color: var(--color-text); font-variant-numeric: tabular-nums;">
           ${formatMoney(totalesSalida.totalEfectivoCentimos)}
         </span>
       </div>
 
+      <!-- 4. Gastos personales y viáticos (si existen) -->
+      ${totalesSalida.totalGastosCentimos > 0 ? `
+        <div style="padding: 6px 0; border-top: 1px dashed var(--color-border); margin-top: 4px;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <span style="font-size: 0.95rem; font-weight: 800; color: #b45309;">
+              🛵 Viáticos y gastos personales (${gastos.length}):
+            </span>
+            <span style="font-size: 1.15rem; font-weight: 800; color: #b45309; font-variant-numeric: tabular-nums;">
+              + ${formatMoney(totalesSalida.totalGastosCentimos)}
+            </span>
+          </div>
+          <div style="margin-top: 4px; padding-left: 8px; font-size: 0.8rem; color: var(--color-text-muted); display: flex; flex-direction: column; gap: 2px;">
+            ${gastos.map(g => {
+              const cat = getCategoriaInfo(g.categoria);
+              return `<div>${cat.icon} <strong>${escapeHtml(g.descripcion || cat.label)}</strong>: ${formatMoney(g.montoCentimos)}</div>`;
+            }).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- 5. Costo Total Real de la Salida -->
+      <div style="display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0 2px 0; border-top: 2px solid var(--color-border); margin-top: 6px;">
+        <span style="font-size: 1.1rem; font-weight: 900; color: var(--color-text);">
+          COSTO TOTAL REAL:
+        </span>
+        <span style="font-size: 1.5rem; font-weight: 900; color: var(--color-primary); font-variant-numeric: tabular-nums;">
+          ${formatMoney(totalesSalida.granTotalCentimos)}
+        </span>
+      </div>
+
       <p style="font-size: 0.75rem; color: var(--color-text-dim); margin-top: 6px; font-style: italic;">
-        * La diferencia de stands se refleja en el total final y no se reparte entre los precios individuales de los productos.
+        * El Costo Total Real suma el total pagado por mercadería en los stands más los viáticos y gastos personales de la jornada.
       </p>
     </div>
 

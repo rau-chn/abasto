@@ -23,6 +23,7 @@ import {
   crearStand,
   crearLinea,
   crearItemPlanificado,
+  crearGasto,
   calcularTotalesStand,
   calcularTotalesSalida,
   deducirCatalogo,
@@ -220,6 +221,32 @@ test('calcularTotalesSalida acumula usando total pagado real si existe y muestra
   assert.strictEqual(totSalida.diferenciaCentimos, -500);
   assert.strictEqual(totSalida.totalStands, 2);
   assert.strictEqual(totSalida.totalLineas, 3);
+  assert.strictEqual(totSalida.totalGastosCentimos, 0);
+  assert.strictEqual(totSalida.granTotalCentimos, 39000);
+});
+
+test('crearGasto y calcularTotalesSalida con gastos personales y viaticos', () => {
+  const salida = crearSalida('Compra con viáticos');
+  const stand = crearStand('Puesto 1');
+  stand.lineas.push(crearLinea('Arroz', 2, 'saco', 5000)); // S/ 100.00
+  salida.stands.push(stand);
+
+  // Gastos
+  const gasto1 = crearGasto('Pasajes bus ida y vuelta', 650, 'pasajes'); // S/ 6.50
+  const gasto2 = crearGasto('Desayuno sandwich y café', 1200, 'comida'); // S/ 12.00
+  const gasto3 = crearGasto('Estibador descarga', 1500, 'estibador');    // S/ 15.00
+
+  assert.strictEqual(gasto1.montoCentimos, 650);
+  assert.strictEqual(gasto1.categoria, 'pasajes');
+  assert.ok(gasto1.id, 'Debe generar id único');
+
+  salida.gastos.push(gasto1, gasto2, gasto3);
+
+  const tot = calcularTotalesSalida(salida);
+  assert.strictEqual(tot.totalCalculadoCentimos, 10000);
+  assert.strictEqual(tot.totalEfectivoCentimos, 10000);
+  assert.strictEqual(tot.totalGastosCentimos, 3350); // S/ 33.50
+  assert.strictEqual(tot.granTotalCentimos, 13350);  // S/ 100.00 + S/ 33.50 = S/ 133.50
 });
 
 test('deducirCatalogo incluye botones rápidos (con balde) y aprende unidades del historial', () => {
@@ -575,6 +602,37 @@ test('generarTextoWhatsAppResumen formatea texto legible con emojis y totales ex
   assert.ok(txt.includes('Don Lucho'));
   assert.ok(txt.includes('Harina Anita'));
   assert.ok(txt.includes('S/ 550.00'));
+});
+
+test('generarCSVResumen y generarTextoWhatsAppResumen incluyen sección y totales de viaticos si existen', () => {
+  const salida = crearSalida('Compra con Viáticos');
+  const stand = crearStand('Distribuidora El Sol');
+  stand.lineas.push(crearLinea('Aceite', 2, 'caja', 10000));
+  salida.stands.push(stand);
+
+  salida.gastos.push(
+    crearGasto('Taxi ida y vuelta', 2500, 'pasajes'),
+    crearGasto('Almuerzo menú ejecutivo', 1400, 'comida')
+  );
+
+  // 1. Validar CSV
+  const csv = generarCSVResumen(salida);
+  assert.ok(csv.includes('--- GASTOS PERSONALES Y VIÁTICOS ---'));
+  assert.ok(csv.includes('Total Viáticos / Gastos (S/)'));
+  assert.ok(csv.includes('Costo Total Real Salida (S/)'));
+  assert.ok(csv.includes('Taxi ida y vuelta'));
+  assert.ok(csv.includes('25.00'));
+  assert.ok(csv.includes('14.00'));
+  assert.ok(csv.includes('39.00')); // Total viáticos
+  assert.ok(csv.includes('239.00')); // Total real (200.00 mercadería + 39.00 viáticos)
+
+  // 2. Validar WhatsApp
+  const txt = generarTextoWhatsAppResumen(salida);
+  assert.ok(txt.includes('*🛵 GASTOS Y VIÁTICOS:*'));
+  assert.ok(txt.includes('Taxi ida y vuelta'));
+  assert.ok(txt.includes('S/ 25.00'));
+  assert.ok(txt.includes('Viáticos / Gastos: S/ 39.00'));
+  assert.ok(txt.includes('Costo Total Real: *S/ 239.00*'));
 });
 
 test('generarCSVListaPlanificada exporta CSV con BOM UTF-8 y distingue pendientes vs completa', () => {

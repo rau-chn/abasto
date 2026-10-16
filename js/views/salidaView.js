@@ -1,10 +1,30 @@
 /**
- * Vista de Salida: Lista de stands, total acumulado visible siempre y botón grande "Agregar stand".
+ * Vista de Salida: Lista de stands, gastos personales y viáticos, total acumulado visible siempre y botón grande "Agregar stand".
  */
 
-import { getState, agregarStandAction, eliminarStandAction } from '../store.js';
+import {
+  getState,
+  agregarStandAction,
+  eliminarStandAction,
+  agregarGastoAction,
+  actualizarGastoAction,
+  eliminarGastoAction
+} from '../store.js';
 import { calcularTotalesStand, calcularTotalesSalida } from '../models.js';
-import { formatMoney, describirDiferencia } from '../money.js';
+import { formatMoney, describirDiferencia, solesToCentimos, centimosToSoles } from '../money.js';
+
+const CATEGORIAS_GASTO = [
+  { id: 'pasajes', label: 'Pasajes / Taxi', icon: '🚗' },
+  { id: 'comida', label: 'Comida / Refrigerio', icon: '🍔' },
+  { id: 'estibador', label: 'Estibador', icon: '💪' },
+  { id: 'flete', label: 'Flete / Carga', icon: '🚚' },
+  { id: 'cochera', label: 'Cochera / Peaje', icon: '🅿️' },
+  { id: 'otro', label: 'Otro gasto', icon: '🏷️' }
+];
+
+function getCategoriaInfo(catId) {
+  return CATEGORIAS_GASTO.find(c => c.id === catId) || { id: 'otro', label: 'Otro gasto', icon: '🏷️' };
+}
 
 export function renderSalidaView(container, salidaId) {
   const state = getState();
@@ -26,6 +46,7 @@ export function renderSalidaView(container, salidaId) {
   const totalesSalida = calcularTotalesSalida(salida);
   const descDiff = describirDiferencia(totalesSalida.diferenciaCentimos);
   const stands = Array.isArray(salida.stands) ? salida.stands : [];
+  const gastos = Array.isArray(salida.gastos) ? salida.gastos : [];
   const catalogoStands = state.catalogo.stands || [];
 
   const html = `
@@ -125,19 +146,96 @@ export function renderSalidaView(container, salidaId) {
       </div>
     `}
 
+    <!-- Sección: Gastos Personales y Viáticos -->
+    <div class="card" style="border-left: 4px solid #f59e0b; margin-top: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.3rem;">🛵</span>
+          <div>
+            <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--color-text); margin: 0;">
+              Gastos Personales y Viáticos
+            </h3>
+            <span style="font-size: 0.75rem; color: var(--color-text-dim);">
+              Pasajes, comida, flete, estibador, etc. (se suman al costo real)
+            </span>
+          </div>
+        </div>
+        <button id="btn-abrir-modal-gasto" class="btn btn-outline" style="min-height: 36px; padding: 4px 10px; font-size: 0.8rem; border-color: #f59e0b; color: #b45309; font-weight: 700; white-space: nowrap;">
+          ➕ Gasto / Viático
+        </button>
+      </div>
+
+      ${gastos.length === 0 ? `
+        <div style="text-align: center; padding: 14px 8px; background: var(--color-bg); border-radius: var(--radius-sm); color: var(--color-text-dim);">
+          <p style="font-size: 0.85rem; margin-bottom: 6px;">No has registrado viáticos ni pasajes para esta salida.</p>
+          <button id="btn-agregar-primer-gasto" class="btn btn-outline" style="font-size: 0.8rem; padding: 4px 10px; min-height: 32px;">
+            + Registrar pasaje, comida o flete
+          </button>
+        </div>
+      ` : `
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          ${gastos.map(g => {
+            const cat = getCategoriaInfo(g.categoria);
+            return `
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: var(--color-bg); border-radius: var(--radius-sm); border: 1px solid var(--color-border); gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                  <span style="font-size: 1.15rem;" title="${escapeHtml(cat.label)}">${cat.icon}</span>
+                  <div style="min-width: 0;">
+                    <div style="font-size: 0.9rem; font-weight: 700; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                      ${escapeHtml(g.descripcion || cat.label)}
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--color-text-muted);">
+                      ${escapeHtml(cat.label)}
+                    </div>
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 1rem; font-weight: 800; color: #b45309; font-variant-numeric: tabular-nums; white-space: nowrap;">
+                    ${formatMoney(g.montoCentimos)}
+                  </span>
+                  <button class="btn-icon" data-action="editar-gasto" data-id="${g.id}" title="Editar gasto" style="width: 32px; min-height: 32px; font-size: 0.85rem;">
+                    ✏️
+                  </button>
+                  <button class="btn-icon" data-action="eliminar-gasto" data-id="${g.id}" title="Eliminar gasto" style="width: 32px; min-height: 32px; font-size: 0.85rem; color: var(--color-danger);">
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+
+          <div style="display: flex; justify-content: space-between; align-items: baseline; padding-top: 6px; margin-top: 4px; border-top: 1px dashed var(--color-border);">
+            <span style="font-size: 0.85rem; font-weight: 700; color: var(--color-text-muted);">
+              Subtotal Viáticos (${gastos.length}):
+            </span>
+            <span style="font-size: 1.05rem; font-weight: 800; color: #b45309; font-variant-numeric: tabular-nums;">
+              ${formatMoney(totalesSalida.totalGastosCentimos)}
+            </span>
+          </div>
+        </div>
+      `}
+    </div>
+
     <!-- Barra flotante fija inferior con Total Acumulado Siempre Visible -->
     <div class="bottom-total-bar">
       <div class="bottom-total-inner">
         <div class="total-display-group">
-          <span class="total-label">Total Acumulado de la Salida</span>
+          <span class="total-label">
+            ${totalesSalida.totalGastosCentimos > 0 ? 'Costo Total Real (Mercadería + Viáticos)' : 'Total Acumulado de la Salida'}
+          </span>
           <div style="display: flex; align-items: baseline; gap: 8px;">
-            <span class="total-amount">${formatMoney(totalesSalida.totalEfectivoCentimos)}</span>
+            <span class="total-amount">${formatMoney(totalesSalida.granTotalCentimos)}</span>
             ${totalesSalida.diferenciaCentimos !== 0 ? `
               <span class="badge ${descDiff.tipo === 'descuento' ? 'badge-success' : 'badge-warning'}">
                 ${descDiff.montoStr}
               </span>
             ` : ''}
           </div>
+          ${totalesSalida.totalGastosCentimos > 0 ? `
+            <div style="font-size: 0.72rem; color: var(--color-text-dim); margin-top: 1px;">
+              Stands: ${formatMoney(totalesSalida.totalEfectivoCentimos)} · Viáticos: ${formatMoney(totalesSalida.totalGastosCentimos)}
+            </div>
+          ` : ''}
         </div>
 
         <button id="btn-agregar-stand-flotante" class="btn btn-primary" style="padding: 10px 16px;">
@@ -178,6 +276,44 @@ export function renderSalidaView(container, salidaId) {
         </div>
       </div>
     </div>
+
+    <!-- Modal para Registrar / Editar Gasto -->
+    <div id="modal-gasto" class="modal-overlay" style="display: none;">
+      <div class="modal-content" onclick="event.stopPropagation();">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modal-gasto-titulo">Registrar Gasto o Viático</h3>
+          <button id="btn-cerrar-modal-gasto" class="btn-icon" style="color: var(--color-text-dim);">✕</button>
+        </div>
+
+        <input type="hidden" id="input-gasto-id" value="" />
+
+        <div class="form-group">
+          <label class="form-label">Categoría</label>
+          <div id="contenedor-chips-categorias" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px;">
+            ${CATEGORIAS_GASTO.map(c => `
+              <button type="button" class="btn-chip-gasto" data-cat="${c.id}" style="padding: 6px 10px; border-radius: 20px; font-size: 0.82rem; border: 1.5px solid var(--color-border); background: var(--color-surface); color: var(--color-text); cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                <span>${c.icon}</span> <span>${c.label}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="input-gasto-desc">Descripción *</label>
+          <input type="text" id="input-gasto-desc" class="form-input" placeholder="Ej. Pasaje bus ida/vuelta, Almuerzo menú, Flete combi" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="input-gasto-monto">Monto en Soles (S/) *</label>
+          <input type="number" id="input-gasto-monto" class="form-input" step="0.10" min="0" placeholder="Ej. 12.50" inputmode="decimal" />
+        </div>
+
+        <div class="modal-actions" style="margin-top: 10px;">
+          <button id="btn-cancelar-gasto" class="btn btn-outline">Cancelar</button>
+          <button id="btn-guardar-gasto" class="btn btn-primary">Guardar Gasto</button>
+        </div>
+      </div>
+    </div>
   `;
 
   container.innerHTML = html;
@@ -214,7 +350,7 @@ export function renderSalidaView(container, salidaId) {
   };
 
   // Autocompletar dirección si el stand ya fue usado en salidas anteriores
-  inputNombre.addEventListener('change', () => {
+  inputNombre?.addEventListener('change', () => {
     const val = inputNombre.value.trim().toLowerCase();
     const encontrado = catalogoStands.find(s => s.nombre.toLowerCase() === val);
     if (encontrado && encontrado.direccion && !inputDireccion.value) {
@@ -227,7 +363,7 @@ export function renderSalidaView(container, salidaId) {
   container.querySelector('#btn-cerrar-modal-stand')?.addEventListener('click', cerrarModal);
   container.querySelector('#btn-cancelar-stand')?.addEventListener('click', cerrarModal);
 
-  modalStand.addEventListener('click', (e) => {
+  modalStand?.addEventListener('click', (e) => {
     if (e.target === modalStand) cerrarModal();
   });
 
@@ -274,6 +410,130 @@ export function renderSalidaView(container, salidaId) {
       const standId = btn.dataset.id;
       if (confirm('¿Eliminar este stand y todos sus productos registrados?')) {
         await eliminarStandAction(salidaId, standId);
+      }
+    });
+  });
+
+  // Lógica Modal Gastos / Viáticos
+  const modalGasto = container.querySelector('#modal-gasto');
+  const inputGastoId = container.querySelector('#input-gasto-id');
+  const inputGastoDesc = container.querySelector('#input-gasto-desc');
+  const inputGastoMonto = container.querySelector('#input-gasto-monto');
+  const tituloModalGasto = container.querySelector('#modal-gasto-titulo');
+  let categoriaSeleccionada = 'pasajes';
+
+  const actualizarEstiloChips = () => {
+    container.querySelectorAll('.btn-chip-gasto').forEach(chip => {
+      const esActivo = chip.dataset.cat === categoriaSeleccionada;
+      chip.style.borderColor = esActivo ? 'var(--color-primary)' : 'var(--color-border)';
+      chip.style.background = esActivo ? 'rgba(59, 130, 246, 0.15)' : 'var(--color-surface)';
+      chip.style.fontWeight = esActivo ? '800' : '400';
+    });
+  };
+
+  const abrirModalGasto = (gastoAEditar = null) => {
+    modalGasto.style.display = 'flex';
+    if (gastoAEditar) {
+      tituloModalGasto.textContent = 'Editar Gasto / Viático';
+      inputGastoId.value = gastoAEditar.id;
+      inputGastoDesc.value = gastoAEditar.descripcion || '';
+      inputGastoMonto.value = centimosToSoles(gastoAEditar.montoCentimos);
+      categoriaSeleccionada = gastoAEditar.categoria || 'otro';
+    } else {
+      tituloModalGasto.textContent = 'Registrar Gasto o Viático';
+      inputGastoId.value = '';
+      inputGastoDesc.value = '';
+      inputGastoMonto.value = '';
+      categoriaSeleccionada = 'pasajes';
+    }
+    actualizarEstiloChips();
+    setTimeout(() => {
+      if (!inputGastoDesc.value) {
+        inputGastoDesc.focus();
+      } else {
+        inputGastoMonto.focus();
+      }
+    }, 50);
+  };
+
+  const cerrarModalGasto = () => {
+    modalGasto.style.display = 'none';
+  };
+
+  container.querySelector('#btn-abrir-modal-gasto')?.addEventListener('click', () => abrirModalGasto());
+  container.querySelector('#btn-agregar-primer-gasto')?.addEventListener('click', () => abrirModalGasto());
+  container.querySelector('#btn-cerrar-modal-gasto')?.addEventListener('click', cerrarModalGasto);
+  container.querySelector('#btn-cancelar-gasto')?.addEventListener('click', cerrarModalGasto);
+
+  modalGasto?.addEventListener('click', (e) => {
+    if (e.target === modalGasto) cerrarModalGasto();
+  });
+
+  container.querySelectorAll('.btn-chip-gasto').forEach(chip => {
+    chip.addEventListener('click', () => {
+      categoriaSeleccionada = chip.dataset.cat;
+      actualizarEstiloChips();
+      if (!inputGastoDesc.value.trim()) {
+        const catObj = getCategoriaInfo(categoriaSeleccionada);
+        inputGastoDesc.value = catObj.label;
+      }
+      inputGastoMonto.focus();
+    });
+  });
+
+  const guardarGasto = async () => {
+    const desc = inputGastoDesc.value.trim() || getCategoriaInfo(categoriaSeleccionada).label;
+    const montoVal = inputGastoMonto.value.trim();
+    const centimos = solesToCentimos(montoVal);
+
+    if (centimos <= 0) {
+      alert('Ingresa un monto válido para el gasto.');
+      inputGastoMonto.focus();
+      return;
+    }
+
+    const editId = inputGastoId.value;
+    if (editId) {
+      await actualizarGastoAction(salidaId, {
+        id: editId,
+        descripcion: desc,
+        montoCentimos: centimos,
+        categoria: categoriaSeleccionada
+      });
+    } else {
+      await agregarGastoAction(salidaId, {
+        descripcion: desc,
+        montoCentimos: centimos,
+        categoria: categoriaSeleccionada
+      });
+    }
+
+    cerrarModalGasto();
+  };
+
+  container.querySelector('#btn-guardar-gasto')?.addEventListener('click', guardarGasto);
+  inputGastoMonto?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') guardarGasto();
+  });
+  inputGastoDesc?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') inputGastoMonto.focus();
+  });
+
+  container.querySelectorAll('[data-action="editar-gasto"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const gastoId = btn.dataset.id;
+      const g = gastos.find(item => item.id === gastoId);
+      if (g) abrirModalGasto(g);
+    });
+  });
+
+  container.querySelectorAll('[data-action="eliminar-gasto"]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const gastoId = btn.dataset.id;
+      if (confirm('¿Eliminar este gasto de viáticos?')) {
+        await eliminarGastoAction(salidaId, gastoId);
       }
     });
   });

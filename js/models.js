@@ -164,7 +164,8 @@ export function crearSalida(nombre = '', fecha = null) {
     createdAt: now,
     updatedAt: now,
     stands: [],
-    listaPlanificada: []
+    listaPlanificada: [],
+    gastos: []
   };
 }
 
@@ -231,6 +232,22 @@ export function crearItemPlanificado(producto, cantidadPlaneada, unidad = '') {
 }
 
 /**
+ * Crea un gasto operativo o viático de la salida (pasajes, comida, estibador, flete, etc.).
+ * @param {string} descripcion - Descripción del gasto
+ * @param {number} montoCentimos - Monto en céntimos
+ * @param {string} [categoria='otro'] - Categoría (pasajes, comida, estibador, flete, cochera, otro)
+ * @returns {object}
+ */
+export function crearGasto(descripcion, montoCentimos, categoria = 'otro') {
+  return {
+    id: crearId(),
+    descripcion: (descripcion || '').trim(),
+    montoCentimos: Math.round(Number(montoCentimos) || 0),
+    categoria: (categoria || 'otro').trim()
+  };
+}
+
+/**
  * Calcula los totales de un stand.
  * @param {object} stand - Stand a evaluar
  * @returns {{ totalCalculadoCentimos: number, totalEfectivoCentimos: number, diferenciaCentimos: number, tienePagadoReal: boolean }}
@@ -273,25 +290,28 @@ export function calcularTotalesStand(stand) {
  * Regla: usa el 'total pagado real' del stand si existe; si no, el calculado.
  * Muestra siempre la diferencia neta.
  * @param {object} salida - Salida a evaluar
- * @returns {{ totalCalculadoCentimos: number, totalEfectivoCentimos: number, diferenciaCentimos: number, totalStands: number, totalLineas: number }}
+ * @returns {{ totalCalculadoCentimos: number, totalEfectivoCentimos: number, diferenciaCentimos: number, totalStands: number, totalLineas: number, totalGastosCentimos: number, granTotalCentimos: number }}
  */
 export function calcularTotalesSalida(salida) {
-  if (!salida || !Array.isArray(salida.stands)) {
+  if (!salida) {
     return {
       totalCalculadoCentimos: 0,
       totalEfectivoCentimos: 0,
       diferenciaCentimos: 0,
       totalStands: 0,
-      totalLineas: 0
+      totalLineas: 0,
+      totalGastosCentimos: 0,
+      granTotalCentimos: 0
     };
   }
 
+  const stands = Array.isArray(salida.stands) ? salida.stands : [];
   let totalCalculadoCentimos = 0;
   let totalEfectivoCentimos = 0;
   let diferenciaCentimos = 0;
   let totalLineas = 0;
 
-  for (const stand of salida.stands) {
+  for (const stand of stands) {
     const totalesStand = calcularTotalesStand(stand);
     totalCalculadoCentimos += totalesStand.totalCalculadoCentimos;
     totalEfectivoCentimos += totalesStand.totalEfectivoCentimos;
@@ -299,12 +319,18 @@ export function calcularTotalesSalida(salida) {
     totalLineas += (stand.lineas || []).length;
   }
 
+  const gastos = Array.isArray(salida.gastos) ? salida.gastos : [];
+  const totalGastosCentimos = sumarCentimos(gastos.map(g => g.montoCentimos || 0));
+  const granTotalCentimos = sumarCentimos([totalEfectivoCentimos, totalGastosCentimos]);
+
   return {
     totalCalculadoCentimos,
     totalEfectivoCentimos,
     diferenciaCentimos,
-    totalStands: salida.stands.length,
-    totalLineas
+    totalStands: stands.length,
+    totalLineas,
+    totalGastosCentimos,
+    granTotalCentimos
   };
 }
 

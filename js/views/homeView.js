@@ -71,14 +71,19 @@ export function renderHomeView(container) {
                     <span class="badge badge-neutral">📅 ${fechaFormateada}</span>
                   </div>
                   <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-top: 4px;">
-                    ${totales.totalStands} ${totales.totalStands === 1 ? 'stand' : 'stands'} · ${totales.totalLineas} ${totales.totalLineas === 1 ? 'producto' : 'productos'}
+                    ${totales.totalStands} ${totales.totalStands === 1 ? 'stand' : 'stands'} · ${totales.totalLineas} ${totales.totalLineas === 1 ? 'producto' : 'productos'}${totales.totalGastosCentimos > 0 ? ` · 🛵 Viáticos` : ''}
                   </div>
                 </div>
 
                 <div style="text-align: right;">
                   <div style="font-size: 1.25rem; font-weight: 800; color: var(--color-text);">
-                    ${formatMoney(totales.totalEfectivoCentimos)}
+                    ${formatMoney(totales.granTotalCentimos)}
                   </div>
+                  ${totales.totalGastosCentimos > 0 ? `
+                    <div style="font-size: 0.72rem; color: #b45309; font-weight: 700;">
+                      (incl. ${formatMoney(totales.totalGastosCentimos)} viáticos)
+                    </div>
+                  ` : ''}
                   ${totales.diferenciaCentimos !== 0 ? `
                     <span class="badge ${descDiff.tipo === 'descuento' ? 'badge-success' : 'badge-warning'}" style="margin-top: 2px;">
                       ${descDiff.montoStr}

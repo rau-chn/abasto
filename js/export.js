@@ -205,6 +205,10 @@ export function generarCSVResumen(salida) {
   lineasCSV.push(`Total Calculado (S/),${escaparCSV(centimosToSoles(totales.totalCalculadoCentimos))}`);
   lineasCSV.push(`Total Pagado Real (S/),${escaparCSV(centimosToSoles(totales.totalEfectivoCentimos))}`);
   lineasCSV.push(`Diferencia Neta (S/),${escaparCSV(centimosToSoles(totales.diferenciaCentimos))}`);
+  if (totales.totalGastosCentimos > 0) {
+    lineasCSV.push(`Total Viáticos / Gastos (S/),${escaparCSV(centimosToSoles(totales.totalGastosCentimos))}`);
+    lineasCSV.push(`Costo Total Real Salida (S/),${escaparCSV(centimosToSoles(totales.granTotalCentimos))}`);
+  }
   lineasCSV.push(''); // Fila vacía
 
   // --- SECCIÓN 2: RESUMEN POR STAND ---
@@ -224,7 +228,22 @@ export function generarCSVResumen(salida) {
   }
   lineasCSV.push(''); // Fila vacía
 
-  // --- SECCIÓN 3: LISTADO GENERAL POR PRODUCTO (CONSOLIDADO) ---
+  // --- SECCIÓN 3: GASTOS PERSONALES Y VIÁTICOS (SI EXISTEN) ---
+  const gastos = Array.isArray(salida.gastos) ? salida.gastos : [];
+  if (gastos.length > 0) {
+    lineasCSV.push('--- GASTOS PERSONALES Y VIÁTICOS ---');
+    lineasCSV.push('Categoría,Descripción,Monto (S/)');
+    for (const g of gastos) {
+      lineasCSV.push([
+        escaparCSV(g.categoria || 'otro'),
+        escaparCSV(g.descripcion || ''),
+        escaparCSV(centimosToSoles(g.montoCentimos))
+      ].join(','));
+    }
+    lineasCSV.push(''); // Fila vacía
+  }
+
+  // --- SECCIÓN 4: LISTADO GENERAL POR PRODUCTO (CONSOLIDADO) ---
   lineasCSV.push('--- LISTADO GENERAL POR PRODUCTO (CONSOLIDADO) ---');
   lineasCSV.push('Producto,Unidad,Cantidad Total,Precio Promedio Ponderado (S/),Precio Mínimo (S/),Precio Máximo (S/),Stand(s) Más Barato(s),Total Gastado (S/)');
   for (const g of grupos) {
@@ -241,7 +260,7 @@ export function generarCSVResumen(salida) {
   }
   lineasCSV.push(''); // Fila vacía
 
-  // --- SECCIÓN 4: DETALLE COMPLETO DE LÍNEAS DE COMPRA ---
+  // --- SECCIÓN 5: DETALLE COMPLETO DE LÍNEAS DE COMPRA ---
   lineasCSV.push('--- DETALLE DE LÍNEAS DE COMPRA ---');
   lineasCSV.push('Stand,Producto,Cantidad,Unidad,Precio Unitario (S/),Subtotal (S/)');
   for (const st of stands) {
@@ -293,7 +312,11 @@ export function generarTextoWhatsAppResumen(salida) {
   texto += `📅 Fecha: ${salida.fecha || 'Hoy'}\n`;
   if (salida.nombre) texto += `📝 Salida: ${salida.nombre}\n`;
   texto += `🏪 Stands visitados: ${totales.totalStands}\n`;
-  texto += `💰 Total Pagado: *${formatMoney(totales.totalEfectivoCentimos)}*\n`;
+  texto += `💰 Total Mercadería: *${formatMoney(totales.totalEfectivoCentimos)}*\n`;
+  if (totales.totalGastosCentimos > 0) {
+    texto += `🛵 Viáticos / Gastos: ${formatMoney(totales.totalGastosCentimos)}\n`;
+    texto += `🏁 Costo Total Real: *${formatMoney(totales.granTotalCentimos)}*\n`;
+  }
   if (totales.diferenciaCentimos !== 0) {
     texto += `⚖️ Diferencia vs lista: ${descDiff.textoLargo}\n`;
   }
@@ -313,6 +336,14 @@ export function generarTextoWhatsAppResumen(salida) {
       texto += ` [${d.signo}${formatMoney(Math.abs(tSt.diferenciaCentimos))}]`;
     }
     texto += `\n`;
+  }
+
+  const gastos = Array.isArray(salida.gastos) ? salida.gastos : [];
+  if (gastos.length > 0) {
+    texto += `\n*🛵 GASTOS Y VIÁTICOS:*\n`;
+    for (const g of gastos) {
+      texto += `• ${g.descripcion || g.categoria}: ${formatMoney(g.montoCentimos)}\n`;
+    }
   }
 
   texto += `\n_Generado automáticamente con Abasto Bodega_`;
