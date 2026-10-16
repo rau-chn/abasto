@@ -129,17 +129,22 @@ export function parsearCSV(csvText) {
   const lineas = limpio.split(/\r?\n/).filter(l => l.trim().length > 0);
   if (lineas.length === 0) return [];
 
-  // Detectar delimitador (coma, punto y coma o tabulación)
-  const primeraLinea = lineas[0];
-  const countComas = (primeraLinea.match(/,/g) || []).length;
-  const countPuntosComas = (primeraLinea.match(/;/g) || []).length;
-  const countTabs = (primeraLinea.match(/\t/g) || []).length;
-
+  // Detectar delimitador (coma, punto y coma o tabulación) buscando en las primeras líneas
   let delimitador = ',';
-  if (countPuntosComas > countComas && countPuntosComas >= countTabs) {
-    delimitador = ';';
-  } else if (countTabs > countComas && countTabs > countPuntosComas) {
-    delimitador = '\t';
+  for (const l of lineas.slice(0, 5)) {
+    const countComas = (l.match(/,/g) || []).length;
+    const countPuntosComas = (l.match(/;/g) || []).length;
+    const countTabs = (l.match(/\t/g) || []).length;
+    if (countComas > 0 || countPuntosComas > 0 || countTabs > 0) {
+      if (countPuntosComas > countComas && countPuntosComas >= countTabs) {
+        delimitador = ';';
+      } else if (countTabs > countComas && countTabs > countPuntosComas) {
+        delimitador = '\t';
+      } else {
+        delimitador = ',';
+      }
+      break;
+    }
   }
 
   // Parser básico de línea CSV respetando comillas
@@ -171,34 +176,85 @@ export function parsearCSV(csvText) {
   const filas = lineas.map(separarCampos);
   if (filas.length === 0) return [];
 
-  // Detectar si la primera fila son encabezados
-  const primeraFilaNorm = filas[0].map(c => normalizarTexto(c));
+  // Buscar la fila de encabezados entre las primeras filas (para tolerar posibles títulos de reporte)
   let idxProd = -1;
   let idxCant = -1;
   let idxUnid = -1;
+  let filaCabecera = -1;
 
-  primeraFilaNorm.forEach((col, i) => {
-    if (col.includes('prod') || col.includes('nombre') || col.includes('item') || col.includes('descripcion') || col.includes('art') || col.includes('merc') || col.includes('detall')) {
-      idxProd = i;
-    } else if (col.includes('cant') || col.includes('qty') || col.includes('cantidad') || col === 'q') {
-      idxCant = i;
-    } else if (col.includes('unid') || col.includes('unit') || col.includes('medida') || col.includes('present') || col === 'um' || col === 'u.m.') {
-      idxUnid = i;
+  for (let f = 0; f < Math.min(filas.length, 10); f++) {
+    const filaNorm = filas[f].map(c => normalizarTexto(c));
+    let p = -1;
+    let c = -1;
+    let u = -1;
+
+    filaNorm.forEach((col, i) => {
+      // Ignorar expresamente "estado" o "status" para no confundirlo jamás con el nombre del producto
+      if (col === 'estado' || col === 'status') {
+        return;
+      }
+
+      if (
+        col === 'producto' ||
+        col === 'articulo' ||
+        col === 'item' ||
+        col.includes('prod') ||
+        col.includes('nombre') ||
+        col.includes('descripcion') ||
+        col.includes('art') ||
+        col.includes('merc') ||
+        col.includes('detall')
+      ) {
+        if (p === -1 || col === 'producto' || col === 'articulo') {
+          p = i;
+        }
+      } else if (
+        col === 'cantidad' ||
+        col === 'cantidad planeada' ||
+        col.includes('cant') ||
+        col.includes('qty') ||
+        col === 'q'
+      ) {
+        // Priorizar la columna de cantidad planeada/principal antes que "cantidad comprada"
+        if (c === -1 || col === 'cantidad' || col === 'cantidad planeada') {
+          c = i;
+        }
+      } else if (
+        col === 'unidad' ||
+        col.includes('unid') ||
+        col.includes('unit') ||
+        col.includes('medida') ||
+        col.includes('present') ||
+        col === 'um' ||
+        col === 'u.m.'
+      ) {
+        if (u === -1 || col === 'unidad') {
+          u = i;
+        }
+      }
+    });
+
+    if (p !== -1 || (c !== -1 && u !== -1)) {
+      idxProd = p;
+      idxCant = c;
+      idxUnid = u;
+      filaCabecera = f;
+      break;
     }
-  });
+  }
 
   let inicioDatos = 0;
-  if (idxProd !== -1 || idxCant !== -1) {
-    // Había cabecera
-    inicioDatos = 1;
+  if (filaCabecera !== -1) {
+    inicioDatos = filaCabecera + 1;
   } else {
-    // No se detectó cabecera: asumir orden estándar col 0: producto, col 1: cantidad, col 2: unidad
+    // No se detectó fila de cabecera: asumir orden estándar col 0: producto, col 1: cantidad, col 2: unidad
     idxProd = 0;
     idxCant = 1;
     idxUnid = 2;
+    inicioDatos = 0;
   }
 
-  // Si tras la cabecera faltan índices, asignar posiciones por defecto
+  // Asignar posiciones lógicas si no se especificaron todas
   if (idxProd === -1) idxProd = 0;
   if (idxCant === -1) idxCant = 1;
   if (idxUnid === -1) idxUnid = 2;
@@ -209,8 +265,47 @@ export function parsearCSV(csvText) {
     const fila = filas[i];
     if (fila.length === 0) continue;
 
-    const producto = (fila[idxProd] || '').trim();
+    let producto = (fila[idxProd] || '').trim();
     if (!producto) continue;
+
+    const prodNorm = normalizarTexto(producto);
+
+    // Si la celda detectada como producto es la palabra 'producto', 'articulo', o un estado como 'pendiente'/'comprado',
+    // verificar si el nombre real del producto está en otra columna disponible
+    if (
+      prodNorm === 'producto' ||
+      prodNorm === 'articulo' ||
+      prodNorm === 'descripcion' ||
+      prodNorm === 'item' ||
+      prodNorm === 'estado' ||
+      prodNorm === 'pendiente' ||
+      prodNorm === 'comprado'
+    ) {
+      let prodAlternativo = '';
+      for (let colIdx = 0; colIdx < fila.length; colIdx++) {
+        if (colIdx !== idxProd && colIdx !== idxCant && colIdx !== idxUnid) {
+          const val = (fila[colIdx] || '').trim();
+          const valNorm = normalizarTexto(val);
+          if (
+            val &&
+            valNorm !== 'pendiente' &&
+            valNorm !== 'comprado' &&
+            valNorm !== 'estado' &&
+            isNaN(val)
+          ) {
+            prodAlternativo = val;
+            break;
+          }
+        }
+      }
+
+      if (prodAlternativo) {
+        producto = prodAlternativo;
+      } else {
+        // Era una fila de encabezado o metadata sin producto real
+        continue;
+      }
+    }
 
     const rawCant = (fila[idxCant] || '1').replace(',', '.');
     const cantidadPlaneada = parseFloat(rawCant) || 1;

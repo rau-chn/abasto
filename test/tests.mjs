@@ -656,7 +656,7 @@ test('generarCSVResumen y generarTextoWhatsAppResumen incluyen sección y totale
   assert.ok(txt.includes('Costo Total Real: *S/ 239.00*'));
 });
 
-test('generarCSVListaPlanificada exporta CSV con BOM UTF-8 y distingue pendientes vs completa', () => {
+test('generarCSVListaPlanificada exporta CSV con formato directo PRODUCTO,CANTIDAD,UNIDAD reimportable', () => {
   const salida = crearSalida('Compra Mayorista');
   const item1 = crearItemPlanificado('Arroz Costeño', 5, 'saco');
   const item2 = crearItemPlanificado('Azúcar Rubia', 2, 'bolsa');
@@ -670,19 +670,36 @@ test('generarCSVListaPlanificada exporta CSV con BOM UTF-8 y distingue pendiente
   // 1. Toda la lista
   const csvCompleto = generarCSVListaPlanificada(salida, false);
   assert.ok(csvCompleto.startsWith('\uFEFF'), 'Debe incluir BOM UTF-8');
-  assert.ok(csvCompleto.includes('LISTA DE COMPRAS - ABASTO'));
-  assert.ok(csvCompleto.includes('"COMPRADO"'));
-  assert.ok(csvCompleto.includes('"PENDIENTE"'));
+  assert.ok(csvCompleto.includes('PRODUCTO,CANTIDAD,UNIDAD'));
   assert.ok(csvCompleto.includes('"Arroz Costeño"'));
   assert.ok(csvCompleto.includes('"Azúcar Rubia"'));
-  assert.ok(csvCompleto.includes('"Puesto 12"'));
 
   // 2. Solo pendientes
   const csvPendientes = generarCSVListaPlanificada(salida, true);
-  assert.ok(csvPendientes.includes('"PENDIENTE"'));
   assert.ok(csvPendientes.includes('"Azúcar Rubia"'));
-  assert.ok(!csvPendientes.includes('"COMPRADO"'), 'No debe incluir ítems comprados');
-  assert.ok(!csvPendientes.includes('"Arroz Costeño"'));
+  assert.ok(!csvPendientes.includes('"Arroz Costeño"'), 'No debe incluir ítems comprados en solo pendientes');
+
+  // 3. Round-trip: Re-importar el CSV exportado debe interpretarse 100% idéntico en producto, cantidad y unidad
+  const reimportados = parsearCSV(csvCompleto);
+  assert.strictEqual(reimportados.length, 2);
+  assert.strictEqual(reimportados[0].producto, 'Arroz Costeño');
+  assert.strictEqual(reimportados[0].cantidadPlaneada, 5);
+  assert.strictEqual(reimportados[0].unidad, 'saco');
+  assert.strictEqual(reimportados[1].producto, 'Azúcar Rubia');
+  assert.strictEqual(reimportados[1].cantidadPlaneada, 2);
+  assert.strictEqual(reimportados[1].unidad, 'bolsa');
+});
+
+test('parsearCSV tolera CSV con metadatos y columna Estado sin confundir Estado con Producto', () => {
+  const csvConMetadatos = `LISTA DE COMPRAS - ABASTO\nFecha,2026-10-05\n\nEstado,Cantidad Planeada,Unidad,Producto,Cantidad Comprada\n"PENDIENTE",3,"caja","Aceite cielo de 1L",0\n"PENDIENTE",2,"saco","Harina Cielo",0`;
+  const items = parsearCSV(csvConMetadatos);
+  assert.strictEqual(items.length, 2);
+  assert.strictEqual(items[0].producto, 'Aceite cielo de 1L');
+  assert.strictEqual(items[0].cantidadPlaneada, 3);
+  assert.strictEqual(items[0].unidad, 'caja');
+  assert.strictEqual(items[1].producto, 'Harina Cielo');
+  assert.strictEqual(items[1].cantidadPlaneada, 2);
+  assert.strictEqual(items[1].unidad, 'saco');
 });
 
 test('generarTextoWhatsAppLista formatea lista con casillas [ ] y soporte de pendientes vs todos', () => {

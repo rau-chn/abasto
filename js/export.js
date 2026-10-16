@@ -488,33 +488,14 @@ export function generarCSVListaPlanificada(salida, soloPendientes = false) {
   const BOM = '\uFEFF';
   const lineasCSV = [];
 
-  lineasCSV.push('LISTA DE COMPRAS - ABASTO');
-  lineasCSV.push(`Fecha,${escaparCSV(salida.fecha || '')}`);
-  lineasCSV.push(`Salida,${escaparCSV(salida.nombre || 'Compra')}`);
-  lineasCSV.push(`Alcance,${escaparCSV(soloPendientes ? 'Solo Pendientes por comprar' : 'Lista Completa')}`);
-  lineasCSV.push(`Total Ítems en este reporte,${escaparCSV(items.length)}`);
-  lineasCSV.push('');
-
-  lineasCSV.push('Estado,Cantidad Planeada,Unidad,Producto,Cantidad Comprada,Puesto(s) de Compra');
+  // Formato estándar compatible 100% con la importación: PRODUCTO, CANTIDAD, UNIDAD
+  lineasCSV.push('PRODUCTO,CANTIDAD,UNIDAD');
 
   for (const item of items) {
-    const estado = item.comprado ? 'COMPRADO' : 'PENDIENTE';
-    const cantPlaneada = item.cantidadPlaneada;
-    const unidad = item.unidad || 'unidad';
-    const prod = item.producto;
-    const cantComprada = item.cantidadComprada || 0;
-    const standsComprados = (item.lineasAsociadas || [])
-      .map(l => l.standNombre)
-      .filter(Boolean);
-    const standsStr = Array.from(new Set(standsComprados)).join('; ');
-
     lineasCSV.push([
-      escaparCSV(estado),
-      escaparCSV(cantPlaneada),
-      escaparCSV(unidad),
-      escaparCSV(prod),
-      escaparCSV(cantComprada),
-      escaparCSV(standsStr)
+      escaparCSV(item.producto),
+      escaparCSV(item.cantidadPlaneada),
+      escaparCSV(item.unidad || 'unidad')
     ].join(','));
   }
 

@@ -426,7 +426,7 @@ export function renderListaView(container, salidaId) {
             <span style="font-size: 1.4rem;">📊</span>
             <div style="flex: 1;">
               <div style="font-weight: 800; font-size: 0.95rem; color: var(--color-text);">Descargar archivo Excel (.csv)</div>
-              <div style="font-size: 0.75rem; color: var(--color-text-dim);">Compatible con Excel y Google Sheets (cantidades, unidades y estado)</div>
+              <div style="font-size: 0.75rem; color: var(--color-text-dim);">Columnas PRODUCTO, CANTIDAD, UNIDAD (listo para editar o reimportar)</div>
             </div>
             <span style="font-size: 1rem; color: var(--color-primary); font-weight: 800;">⬇️</span>
           </button>
