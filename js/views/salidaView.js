@@ -10,7 +10,7 @@ import {
   actualizarGastoAction,
   eliminarGastoAction
 } from '../store.js';
-import { calcularTotalesStand, calcularTotalesSalida } from '../models.js';
+import { calcularTotalesStand, calcularTotalesSalida, obtenerComprobantesStand } from '../models.js';
 import { formatMoney, describirDiferencia, solesToCentimos, centimosToSoles } from '../money.js';
 
 const CATEGORIAS_GASTO = [
@@ -90,6 +90,7 @@ export function renderSalidaView(container, salidaId) {
           const totStand = calcularTotalesStand(stand);
           const descStandDiff = describirDiferencia(totStand.diferenciaCentimos);
           const numLineas = (stand.lineas || []).length;
+          const standComprobantes = obtenerComprobantesStand(stand);
 
           return `
             <div class="card card-clickable" data-stand-id="${stand.id}">
@@ -113,7 +114,7 @@ export function renderSalidaView(container, salidaId) {
                   <div style="font-size: 0.85rem; color: var(--color-text-dim); margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                     <span>${numLineas} ${numLineas === 1 ? 'producto registrado' : 'productos registrados'}</span>
                     ${stand.ubicacion ? '<span>· 📌 GPS</span>' : ''}
-                    ${stand.comprobante ? '<span class="badge badge-success" style="font-size: 0.7rem; padding: 1px 6px;">🧾 Boleta</span>' : ''}
+                    ${standComprobantes.length > 0 ? `<span class="badge badge-success" style="font-size: 0.7rem; padding: 1px 6px;">🧾 ${standComprobantes.length === 1 ? 'Boleta' : `${standComprobantes.length} boletas`}</span>` : ''}
                   </div>
                 </div>
 

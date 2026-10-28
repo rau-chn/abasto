@@ -170,14 +170,38 @@ export function crearSalida(nombre = '', fecha = null) {
 }
 
 /**
+ * Retorna la lista normalizada de fotos de comprobantes de un stand.
+ * Soporta tanto el nuevo arreglo 'comprobantes: []' como el campo heredado 'comprobante: string'.
+ * @param {object} stand
+ * @returns {string[]}
+ */
+export function obtenerComprobantesStand(stand) {
+  if (!stand) return [];
+  if (Array.isArray(stand.comprobantes)) {
+    return stand.comprobantes.filter(Boolean);
+  }
+  if (stand.comprobante) {
+    return [stand.comprobante];
+  }
+  return [];
+}
+
+/**
  * Crea un nuevo stand dentro de una salida.
  * @param {string} nombre - Nombre del stand (ej. "Puesto 12 - Don Lucho")
  * @param {string} [direccion=''] - Dirección en texto libre
  * @param {string} [notas=''] - Notas opcionales
- * @param {string|null} [comprobante=null] - Imagen en Base64 o URL del comprobante/boleta
+ * @param {string|string[]|null} [comprobante=null] - Imagen o arreglo de imágenes en Base64
  * @returns {object}
  */
 export function crearStand(nombre, direccion = '', notas = '', comprobante = null) {
+  let listaComprobantes = [];
+  if (Array.isArray(comprobante)) {
+    listaComprobantes = comprobante.filter(Boolean);
+  } else if (typeof comprobante === 'string' && comprobante.trim()) {
+    listaComprobantes = [comprobante.trim()];
+  }
+
   return {
     id: crearId(),
     nombre: (nombre || '').trim(),
@@ -185,7 +209,8 @@ export function crearStand(nombre, direccion = '', notas = '', comprobante = nul
     notas: (notas || '').trim(),
     ubicacion: null, // { lat: number, lng: number, timestamp: number } (sin mapsUrl guardado)
     totalPagadoRealCentimos: null,
-    comprobante: comprobante || null,
+    comprobante: listaComprobantes[0] || null, // compatibilidad hacia atrás
+    comprobantes: listaComprobantes,
     lineas: []
   };
 }

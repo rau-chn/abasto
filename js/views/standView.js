@@ -9,7 +9,12 @@ import {
   actualizarLineaAction,
   eliminarLineaAction
 } from '../store.js';
-import { calcularTotalesStand, normalizarTexto, derivarEstadoLista } from '../models.js';
+import {
+  calcularTotalesStand,
+  normalizarTexto,
+  derivarEstadoLista,
+  obtenerComprobantesStand
+} from '../models.js';
 import {
   formatMoney,
   solesToCentimos,
@@ -102,6 +107,8 @@ export function renderStandView(container, salidaId, standId) {
   const catalogo = state.catalogo || { productos: [], stands: [], unidades: [] };
   const lineas = Array.isArray(stand.lineas) ? stand.lineas : [];
   const itemsPendientes = derivarEstadoLista(salida).filter(i => !i.comprado);
+  const comprobantes = obtenerComprobantesStand(stand);
+  const tieneComprobantes = comprobantes.length > 0;
 
   const html = `
     <!-- Encabezado del Stand -->
@@ -147,65 +154,97 @@ export function renderStandView(container, salidaId, standId) {
       </div>
     </div>
 
-    <!-- Tarjeta de Comprobante / Boleta del Stand -->
+    <!-- Tarjeta de Comprobantes / Boletas del Stand (Soporte de múltiples fotos) -->
     <div class="card" style="padding: 12px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <h3 style="font-size: 0.95rem; font-weight: 800; color: var(--color-text-muted); text-transform: uppercase;">
-          🧾 Foto de Boleta / Comprobante
-        </h3>
-        ${stand.comprobante ? `
-          <span class="badge badge-success" style="font-size: 0.75rem;">Adjunta</span>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <h3 style="font-size: 0.95rem; font-weight: 800; color: var(--color-text-muted); text-transform: uppercase;">
+            🧾 Boletas / Comprobantes
+          </h3>
+          <span style="font-size: 0.8rem; color: var(--color-text-dim);">
+            (${comprobantes.length})
+          </span>
+        </div>
+        ${tieneComprobantes ? `
+          <span class="badge badge-success" style="font-size: 0.75rem;">
+            ${comprobantes.length === 1 ? '1 foto' : `${comprobantes.length} fotos`}
+          </span>
         ` : `
           <span style="font-size: 0.8rem; color: var(--color-text-dim);">Opcional</span>
         `}
       </div>
 
-      <!-- Inputs ocultos para captura por cámara o archivo -->
+      <!-- Inputs ocultos para captura por cámara o archivo múltiple -->
       <input type="file" id="input-camara-comprobante" accept="image/*" capture="environment" style="display: none;" />
-      <input type="file" id="input-archivo-comprobante" accept="image/*" style="display: none;" />
+      <input type="file" id="input-archivo-comprobante" accept="image/*" multiple style="display: none;" />
 
       <div id="comprobante-estado" style="display: none; padding: 8px; margin-bottom: 8px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; background: var(--color-warning-bg); color: var(--color-warning); text-align: center;">
       </div>
 
-      ${stand.comprobante ? `
-        <div style="display: flex; gap: 12px; align-items: center;">
-          <!-- Miniatura interactiva con zoom -->
-          <div id="btn-ver-miniatura" style="position: relative; width: 85px; height: 85px; border-radius: var(--radius-sm); overflow: hidden; border: 2px solid var(--color-border); cursor: pointer; flex-shrink: 0; background: #000000;" title="Toca para ver en pantalla completa">
-            <img src="${stand.comprobante}" alt="Comprobante de compra" style="width: 100%; height: 100%; object-fit: cover;" />
-            <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.25rem;">
-              🔍
-            </div>
+      ${tieneComprobantes ? `
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <!-- Tira horizontal deslizable con miniaturas de comprobantes -->
+          <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; align-items: center;">
+            ${comprobantes.map((foto, idx) => `
+              <div style="position: relative; width: 80px; height: 80px; border-radius: var(--radius-sm); overflow: hidden; border: 2px solid var(--color-border); flex-shrink: 0; background: #000; box-shadow: var(--shadow-sm);">
+                <img
+                  src="${foto}"
+                  alt="Comprobante ${idx + 1}"
+                  class="btn-abrir-visor-foto"
+                  data-foto-idx="${idx}"
+                  style="width: 100%; height: 100%; object-fit: cover; cursor: pointer;"
+                  title="Toca para ampliar foto #${idx + 1}"
+                />
+                <span style="position: absolute; bottom: 2px; left: 2px; background: rgba(0,0,0,0.7); color: #fff; font-size: 0.7rem; font-weight: 800; padding: 1px 5px; border-radius: 3px; pointer-events: none;">
+                  #${idx + 1}
+                </span>
+                <button
+                  type="button"
+                  class="btn-eliminar-foto-individual"
+                  data-foto-idx="${idx}"
+                  title="Eliminar esta foto #${idx + 1}"
+                  style="position: absolute; top: 2px; right: 2px; width: 22px; height: 22px; background: rgba(220,38,38,0.9); color: #fff; border: none; border-radius: 50%; font-size: 0.75rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;"
+                >✕</button>
+              </div>
+            `).join('')}
+
+            <!-- Botón de acceso rápido para agregar más a la tira -->
+            <button
+              type="button"
+              id="btn-tira-agregar-mas"
+              class="btn btn-outline"
+              style="width: 80px; height: 80px; border: 2px dashed var(--color-border); border-radius: var(--radius-sm); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; flex-shrink: 0; background: var(--color-surface); cursor: pointer;"
+              title="Agregar más fotos de boletas"
+            >
+              <span style="font-size: 1.3rem; line-height: 1;">➕</span>
+              <span style="font-size: 0.7rem; font-weight: 700; color: var(--color-text-dim);">Agregar</span>
+            </button>
           </div>
 
-          <!-- Acciones de comprobante -->
-          <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-            <button type="button" id="btn-abrir-visor" class="btn btn-outline" style="min-height: 36px; padding: 4px 10px; font-size: 0.85rem; justify-content: flex-start;">
-              🔍 Ver foto completa
+          <!-- Acciones para tomar otra o seleccionar más archivos -->
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button type="button" id="btn-cambiar-camara" class="btn btn-outline" style="min-height: 38px; padding: 4px 10px; font-size: 0.82rem; flex: 1; font-weight: 700; white-space: nowrap;" title="Tomar otra foto con la cámara">
+              📷 Tomar otra foto
             </button>
-            <div style="display: flex; gap: 6px;">
-              <button type="button" id="btn-cambiar-camara" class="btn btn-outline" style="min-height: 36px; padding: 4px 8px; font-size: 0.8rem; flex: 1;" title="Tomar nueva foto con cámara">
-                📷 Cámara
-              </button>
-              <button type="button" id="btn-cambiar-archivo" class="btn btn-outline" style="min-height: 36px; padding: 4px 8px; font-size: 0.8rem; flex: 1;" title="Elegir otra imagen o archivo">
-                📁 Archivo
-              </button>
-              <button type="button" id="btn-eliminar-comprobante" class="btn btn-danger-outline btn-icon" style="min-height: 36px; width: 36px;" title="Eliminar foto">
-                🗑️
-              </button>
-            </div>
+            <button type="button" id="btn-cambiar-archivo" class="btn btn-outline" style="min-height: 38px; padding: 4px 10px; font-size: 0.82rem; flex: 1; font-weight: 700; white-space: nowrap;" title="Elegir más fotos de tu dispositivo">
+              📁 Elegir archivo(s)
+            </button>
+            <button type="button" id="btn-abrir-visor-principal" class="btn btn-outline" style="min-height: 38px; padding: 4px 10px; font-size: 0.82rem; font-weight: 700; white-space: nowrap;" title="Ver fotos en pantalla completa">
+              🔍 Ver visor
+            </button>
           </div>
         </div>
       ` : `
         <div style="display: flex; flex-direction: column; gap: 8px;">
           <p style="font-size: 0.85rem; color: var(--color-text-dim);">
-            Toma foto a la boleta, factura o ticket para tener respaldo visual de tu compra en este stand.
+            Toma foto a las boletas, facturas o tickets para tener respaldo visual (puedes subir 1, 2, 3 o más).
           </p>
           <div style="display: flex; gap: 8px;">
             <button type="button" id="btn-tomar-foto" class="btn btn-outline" style="flex: 1; min-height: 42px; font-size: 0.9rem; font-weight: 700;">
               📷 Tomar foto
             </button>
             <button type="button" id="btn-subir-archivo" class="btn btn-outline" style="flex: 1; min-height: 42px; font-size: 0.9rem; font-weight: 700;">
-              📁 Elegir archivo
+              📁 Elegir archivo(s)
             </button>
           </div>
         </div>
@@ -490,25 +529,46 @@ export function renderStandView(container, salidaId, standId) {
       </div>
     </div>
 
-    <!-- Modal Visor de Comprobante / Boleta en pantalla completa -->
+    <!-- Modal Visor de Comprobante / Boleta en pantalla completa con navegación múltiple -->
     <div id="modal-visor-comprobante" class="modal-overlay" style="display: none;">
       <div class="modal-content" style="max-width: 600px; padding: 14px; max-height: 95vh; display: flex; flex-direction: column;" onclick="event.stopPropagation();">
         <div class="modal-header" style="margin-bottom: 8px;">
           <div>
             <h3 class="modal-title" style="font-size: 1.1rem;">Comprobante de compra</h3>
-            <span style="font-size: 0.8rem; color: var(--color-text-dim);">${escapeHtml(stand.nombre)}</span>
+            <span id="visor-indicador-cuenta" style="font-size: 0.8rem; color: var(--color-text-dim);">
+              ${escapeHtml(stand.nombre)} ${comprobantes.length > 0 ? `· Foto 1 de ${comprobantes.length}` : ''}
+            </span>
           </div>
           <button id="btn-cerrar-visor" class="btn-icon" style="font-size: 1.2rem;">✕</button>
         </div>
 
-        <div style="flex: 1; overflow: auto; text-align: center; background: #000000; border-radius: var(--radius-sm); min-height: 250px; display: flex; align-items: center; justify-content: center; padding: 4px;">
-          <img id="img-visor-comprobante" src="${stand.comprobante || ''}" alt="Foto boleta" style="max-width: 100%; max-height: 65vh; object-fit: contain; border-radius: 4px;" />
+        <div style="position: relative; flex: 1; overflow: auto; text-align: center; background: #000000; border-radius: var(--radius-sm); min-height: 250px; display: flex; align-items: center; justify-content: center; padding: 4px;">
+          <img id="img-visor-comprobante" src="${comprobantes[0] || ''}" alt="Foto boleta" style="max-width: 100%; max-height: 65vh; object-fit: contain; border-radius: 4px;" />
+
+          <!-- Flechas de navegación Anterior / Siguiente -->
+          <button
+            type="button"
+            id="btn-visor-prev"
+            style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,0.65); color: #fff; border: 2px solid rgba(255,255,255,0.3); font-size: 1.3rem; cursor: pointer; display: ${comprobantes.length > 1 ? 'flex' : 'none'}; align-items: center; justify-content: center; z-index: 10;"
+            title="Foto anterior"
+          >◀</button>
+          <button
+            type="button"
+            id="btn-visor-next"
+            style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,0.65); color: #fff; border: 2px solid rgba(255,255,255,0.3); font-size: 1.3rem; cursor: pointer; display: ${comprobantes.length > 1 ? 'flex' : 'none'}; align-items: center; justify-content: center; z-index: 10;"
+            title="Foto siguiente"
+          >▶</button>
         </div>
 
-        <div class="modal-actions" style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
-          <a id="btn-descargar-comprobante" href="${stand.comprobante || '#'}" download="comprobante-${escapeHtml(stand.nombre).toLowerCase().replace(/[^a-z0-9]/g, '_')}.jpg" class="btn btn-outline" style="min-height: 40px; padding: 4px 12px; font-size: 0.85rem; text-decoration: none;">
-            ⬇️ Descargar foto
-          </a>
+        <div class="modal-actions" style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <div style="display: flex; gap: 6px;">
+            <a id="btn-descargar-comprobante" href="${comprobantes[0] || '#'}" download="comprobante-${escapeHtml(stand.nombre).toLowerCase().replace(/[^a-z0-9]/g, '_')}-1.jpg" class="btn btn-outline" style="min-height: 40px; padding: 4px 10px; font-size: 0.85rem; text-decoration: none;">
+              ⬇️ Descargar
+            </a>
+            <button id="btn-eliminar-foto-visor" type="button" class="btn btn-danger-outline" style="min-height: 40px; padding: 4px 10px; font-size: 0.85rem;" title="Eliminar esta foto">
+              🗑️ Eliminar
+            </button>
+          </div>
           <button id="btn-cerrar-visor-footer" class="btn btn-primary" style="min-height: 40px; padding: 4px 16px;">
             Cerrar
           </button>
@@ -1049,25 +1109,39 @@ export function renderStandView(container, salidaId, standId) {
     cerrarModalEdit();
   });
 
-  // Gestión de Foto de Comprobante / Boleta
+  // Gestión de Fotos de Comprobante / Boleta (Múltiples fotos por stand)
   const inputCamara = container.querySelector('#input-camara-comprobante');
   const inputArchivo = container.querySelector('#input-archivo-comprobante');
   const estadoComprobante = container.querySelector('#comprobante-estado');
 
-  const procesarFotoSeleccionada = async (file) => {
-    if (!file) return;
+  const procesarFotosSeleccionadas = async (archivos) => {
+    const files = Array.from(archivos || []).filter(f => f && f.type.startsWith('image/'));
+    if (files.length === 0) return;
+
     if (estadoComprobante) {
       estadoComprobante.style.display = 'block';
-      estadoComprobante.textContent = '⏳ Optimizando y guardando foto del comprobante...';
+      estadoComprobante.textContent = files.length === 1
+        ? '⏳ Optimizando y guardando comprobante...'
+        : `⏳ Optimizando y guardando ${files.length} fotos...`;
     }
+
     try {
-      const dataUrl = await comprimirImagen(file, 1200, 0.75);
+      const nuevasFotos = [];
+      for (const file of files) {
+        const dataUrl = await comprimirImagen(file, 1200, 0.75);
+        nuevasFotos.push(dataUrl);
+      }
+
+      const fotosPrevias = obtenerComprobantesStand(stand);
+      const listaFinal = [...fotosPrevias, ...nuevasFotos];
+
       const mod = {
         ...stand,
         nombre: inputStandNombre?.value.trim() || stand.nombre,
         direccion: inputStandDireccion?.value.trim() ?? (stand.direccion || ''),
         notas: inputStandNotas?.value.trim() ?? (stand.notas || ''),
-        comprobante: dataUrl
+        comprobante: listaFinal[0] || null,
+        comprobantes: listaFinal
       };
       await actualizarStandAction(salidaId, mod);
     } catch (err) {
@@ -1079,14 +1153,14 @@ export function renderStandView(container, salidaId, standId) {
   };
 
   inputCamara?.addEventListener('change', (e) => {
-    const file = e.target.files?.[0];
-    if (file) procesarFotoSeleccionada(file);
+    const files = e.target.files;
+    if (files && files.length > 0) procesarFotosSeleccionadas(files);
     e.target.value = '';
   });
 
   inputArchivo?.addEventListener('change', (e) => {
-    const file = e.target.files?.[0];
-    if (file) procesarFotoSeleccionada(file);
+    const files = e.target.files;
+    if (files && files.length > 0) procesarFotosSeleccionadas(files);
     e.target.value = '';
   });
 
@@ -1094,31 +1168,107 @@ export function renderStandView(container, salidaId, standId) {
   container.querySelector('#btn-subir-archivo')?.addEventListener('click', () => inputArchivo?.click());
   container.querySelector('#btn-cambiar-camara')?.addEventListener('click', () => inputCamara?.click());
   container.querySelector('#btn-cambiar-archivo')?.addEventListener('click', () => inputArchivo?.click());
+  container.querySelector('#btn-tira-agregar-mas')?.addEventListener('click', () => inputArchivo?.click());
 
-  container.querySelector('#btn-eliminar-comprobante')?.addEventListener('click', async () => {
-    if (confirm('¿Eliminar la foto del comprobante de este stand?')) {
+  // Eliminación individual de una foto
+  const eliminarFotoPorIndice = async (idx) => {
+    const fotos = obtenerComprobantesStand(stand);
+    if (idx < 0 || idx >= fotos.length) return;
+    if (confirm(`¿Eliminar la foto #${idx + 1} del comprobante de este stand?`)) {
+      const listaFinal = fotos.filter((_, i) => i !== idx);
       const mod = {
         ...stand,
         nombre: inputStandNombre?.value.trim() || stand.nombre,
         direccion: inputStandDireccion?.value.trim() ?? (stand.direccion || ''),
         notas: inputStandNotas?.value.trim() ?? (stand.notas || ''),
-        comprobante: null
+        comprobante: listaFinal[0] || null,
+        comprobantes: listaFinal
       };
       await actualizarStandAction(salidaId, mod);
     }
+  };
+
+  container.querySelectorAll('.btn-eliminar-foto-individual').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.fotoIdx, 10);
+      await eliminarFotoPorIndice(idx);
+    });
   });
 
-  // Visor de foto en pantalla completa
+  // Visor de fotos en pantalla completa con navegación múltiple
+  let visorFotoIdx = 0;
   const modalVisor = container.querySelector('#modal-visor-comprobante');
-  const abrirVisor = () => {
+  const imgVisor = container.querySelector('#img-visor-comprobante');
+  const indicadorCuentaVisor = container.querySelector('#visor-indicador-cuenta');
+  const btnVisorPrev = container.querySelector('#btn-visor-prev');
+  const btnVisorNext = container.querySelector('#btn-visor-next');
+  const btnDescargarVisor = container.querySelector('#btn-descargar-comprobante');
+  const btnEliminarFotoVisor = container.querySelector('#btn-eliminar-foto-visor');
+
+  const actualizarVisorFoto = (idx) => {
+    const fotos = obtenerComprobantesStand(stand);
+    if (fotos.length === 0) {
+      cerrarVisor();
+      return;
+    }
+    if (idx < 0) idx = fotos.length - 1;
+    if (idx >= fotos.length) idx = 0;
+    visorFotoIdx = idx;
+
+    if (imgVisor) imgVisor.src = fotos[visorFotoIdx];
+    if (indicadorCuentaVisor) {
+      indicadorCuentaVisor.textContent = `${stand.nombre} · Foto ${visorFotoIdx + 1} de ${fotos.length}`;
+    }
+    if (btnDescargarVisor) {
+      btnDescargarVisor.href = fotos[visorFotoIdx];
+      btnDescargarVisor.download = `comprobante-${escapeHtml(stand.nombre).toLowerCase().replace(/[^a-z0-9]/g, '_')}-${visorFotoIdx + 1}.jpg`;
+    }
+    if (btnVisorPrev) btnVisorPrev.style.display = fotos.length > 1 ? 'flex' : 'none';
+    if (btnVisorNext) btnVisorNext.style.display = fotos.length > 1 ? 'flex' : 'none';
+  };
+
+  const abrirVisor = (idx = 0) => {
+    const fotos = obtenerComprobantesStand(stand);
+    if (fotos.length === 0) return;
+    actualizarVisorFoto(idx);
     if (modalVisor) modalVisor.style.display = 'flex';
   };
+
   const cerrarVisor = () => {
     if (modalVisor) modalVisor.style.display = 'none';
   };
 
-  container.querySelector('#btn-ver-miniatura')?.addEventListener('click', abrirVisor);
-  container.querySelector('#btn-abrir-visor')?.addEventListener('click', abrirVisor);
+  btnVisorPrev?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    actualizarVisorFoto(visorFotoIdx - 1);
+  });
+
+  btnVisorNext?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    actualizarVisorFoto(visorFotoIdx + 1);
+  });
+
+  btnEliminarFotoVisor?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const idxAEliminar = visorFotoIdx;
+    await eliminarFotoPorIndice(idxAEliminar);
+    const fotosRestantes = obtenerComprobantesStand(stand);
+    if (fotosRestantes.length === 0) {
+      cerrarVisor();
+    } else {
+      actualizarVisorFoto(Math.min(idxAEliminar, fotosRestantes.length - 1));
+    }
+  });
+
+  container.querySelectorAll('.btn-abrir-visor-foto').forEach(el => {
+    el.addEventListener('click', () => {
+      const idx = parseInt(el.dataset.fotoIdx, 10) || 0;
+      abrirVisor(idx);
+    });
+  });
+
+  container.querySelector('#btn-abrir-visor-principal')?.addEventListener('click', () => abrirVisor(0));
   container.querySelector('#btn-cerrar-visor')?.addEventListener('click', cerrarVisor);
   container.querySelector('#btn-cerrar-visor-footer')?.addEventListener('click', cerrarVisor);
   modalVisor?.addEventListener('click', (e) => {

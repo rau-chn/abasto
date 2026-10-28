@@ -9,7 +9,8 @@ import {
   calcularTotalesSalida,
   agruparPorProductoYUnidad,
   normalizarTexto,
-  derivarEstadoLista
+  derivarEstadoLista,
+  obtenerComprobantesStand
 } from '../models.js';
 import { formatMoney, centimosToSoles, describirDiferencia } from '../money.js';
 import { exportarCSVResumen, compartirResumenWhatsApp } from '../export.js';
@@ -260,6 +261,7 @@ export function renderResumenView(container, salidaId) {
               const totStand = calcularTotalesStand(stand);
               const descStandDiff = describirDiferencia(totStand.diferenciaCentimos);
               const lineasStand = Array.isArray(stand.lineas) ? stand.lineas : [];
+              const standComprobantes = obtenerComprobantesStand(stand);
 
               return `
                 <div class="card" style="padding: 14px;">
@@ -272,7 +274,7 @@ export function renderResumenView(container, salidaId) {
                         <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--color-text);">
                           ${escapeHtml(stand.nombre)}
                         </h3>
-                        ${stand.comprobante ? '<span class="badge badge-success" style="font-size: 0.7rem; padding: 2px 6px;">🧾 Boleta</span>' : ''}
+                        ${standComprobantes.length > 0 ? `<span class="badge badge-success" style="font-size: 0.7rem; padding: 2px 6px;">🧾 ${standComprobantes.length === 1 ? '1 Boleta' : `${standComprobantes.length} boletas`}</span>` : ''}
                       </div>
                       ${stand.direccion ? `
                         <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-top: 2px;">
@@ -284,10 +286,10 @@ export function renderResumenView(container, salidaId) {
                           📝 ${escapeHtml(stand.notas)}
                         </div>
                       ` : ''}
-                      ${stand.comprobante ? `
+                      ${standComprobantes.length > 0 ? `
                         <div style="margin-top: 6px;">
                           <button type="button" class="btn btn-outline" style="min-height: 30px; padding: 2px 8px; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;" data-action="ver-comprobante-resumen" data-stand-id="${stand.id}">
-                            🔍 Ver foto de boleta
+                            🔍 Ver ${standComprobantes.length === 1 ? 'boleta' : `boletas (${standComprobantes.length})`}
                           </button>
                         </div>
                       ` : ''}
@@ -474,7 +476,7 @@ export function renderResumenView(container, salidaId) {
       </p>
     </div>
 
-    <!-- Modal Visor de Comprobante en Resumen -->
+    <!-- Modal Visor de Comprobante en Resumen con navegación múltiple -->
     <div id="modal-resumen-comprobante" class="modal-overlay" style="display: none;">
       <div class="modal-content" style="max-width: 600px; padding: 14px; max-height: 95vh; display: flex; flex-direction: column;" onclick="event.stopPropagation();">
         <div class="modal-header" style="margin-bottom: 8px;">
@@ -485,8 +487,20 @@ export function renderResumenView(container, salidaId) {
           <button id="btn-cerrar-resumen-visor" class="btn-icon" style="font-size: 1.2rem;">✕</button>
         </div>
 
-        <div style="flex: 1; overflow: auto; text-align: center; background: #000000; border-radius: var(--radius-sm); min-height: 250px; display: flex; align-items: center; justify-content: center; padding: 4px;">
+        <div style="position: relative; flex: 1; overflow: auto; text-align: center; background: #000000; border-radius: var(--radius-sm); min-height: 250px; display: flex; align-items: center; justify-content: center; padding: 4px;">
           <img id="img-resumen-comprobante" src="" alt="Foto boleta" style="max-width: 100%; max-height: 65vh; object-fit: contain; border-radius: 4px;" />
+          <button
+            type="button"
+            id="btn-resumen-visor-prev"
+            style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,0.65); color: #fff; border: 2px solid rgba(255,255,255,0.3); font-size: 1.3rem; cursor: pointer; display: none; align-items: center; justify-content: center; z-index: 10;"
+            title="Foto anterior"
+          >◀</button>
+          <button
+            type="button"
+            id="btn-resumen-visor-next"
+            style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,0.65); color: #fff; border: 2px solid rgba(255,255,255,0.3); font-size: 1.3rem; cursor: pointer; display: none; align-items: center; justify-content: center; z-index: 10;"
+            title="Foto siguiente"
+          >▶</button>
         </div>
 
         <div class="modal-actions" style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
@@ -582,15 +596,52 @@ export function renderResumenView(container, salidaId) {
     });
   });
 
-  // Visor de foto de comprobante en Resumen
+  // Visor de fotos de comprobantes en Resumen con navegación múltiple
   const modalResumenVisor = container.querySelector('#modal-resumen-comprobante');
   const imgResumenComprobante = container.querySelector('#img-resumen-comprobante');
   const tituloResumenVisor = container.querySelector('#resumen-modal-subtitulo');
   const btnDescargarResumen = container.querySelector('#btn-descargar-resumen-comprobante');
+  const btnResumenPrev = container.querySelector('#btn-resumen-visor-prev');
+  const btnResumenNext = container.querySelector('#btn-resumen-visor-next');
+
+  let resumenFotos = [];
+  let resumenIdx = 0;
+  let resumenStandNombre = '';
+
+  const actualizarResumenVisor = (idx) => {
+    if (resumenFotos.length === 0) {
+      cerrarResumenVisor();
+      return;
+    }
+    if (idx < 0) idx = resumenFotos.length - 1;
+    if (idx >= resumenFotos.length) idx = 0;
+    resumenIdx = idx;
+
+    if (imgResumenComprobante) imgResumenComprobante.src = resumenFotos[resumenIdx];
+    if (tituloResumenVisor) {
+      tituloResumenVisor.textContent = `${resumenStandNombre} · Foto ${resumenIdx + 1} de ${resumenFotos.length}`;
+    }
+    if (btnDescargarResumen) {
+      btnDescargarResumen.href = resumenFotos[resumenIdx];
+      btnDescargarResumen.download = `comprobante-${resumenStandNombre.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${resumenIdx + 1}.jpg`;
+    }
+    if (btnResumenPrev) btnResumenPrev.style.display = resumenFotos.length > 1 ? 'flex' : 'none';
+    if (btnResumenNext) btnResumenNext.style.display = resumenFotos.length > 1 ? 'flex' : 'none';
+  };
 
   const cerrarResumenVisor = () => {
     if (modalResumenVisor) modalResumenVisor.style.display = 'none';
   };
+
+  btnResumenPrev?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    actualizarResumenVisor(resumenIdx - 1);
+  });
+
+  btnResumenNext?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    actualizarResumenVisor(resumenIdx + 1);
+  });
 
   container.querySelector('#btn-cerrar-resumen-visor')?.addEventListener('click', cerrarResumenVisor);
   container.querySelector('#btn-cerrar-resumen-footer')?.addEventListener('click', cerrarResumenVisor);
@@ -603,14 +654,11 @@ export function renderResumenView(container, salidaId) {
       e.stopPropagation();
       const stId = btn.dataset.standId;
       const targetStand = (stands || []).find(s => s.id === stId);
-      if (!targetStand || !targetStand.comprobante) return;
-
-      if (imgResumenComprobante) imgResumenComprobante.src = targetStand.comprobante;
-      if (tituloResumenVisor) tituloResumenVisor.textContent = targetStand.nombre;
-      if (btnDescargarResumen) {
-        btnDescargarResumen.href = targetStand.comprobante;
-        btnDescargarResumen.download = `comprobante-${targetStand.nombre.toLowerCase().replace(/[^a-z0-9]/g, '_')}.jpg`;
-      }
+      if (!targetStand) return;
+      resumenFotos = obtenerComprobantesStand(targetStand);
+      if (resumenFotos.length === 0) return;
+      resumenStandNombre = targetStand.nombre;
+      actualizarResumenVisor(0);
       if (modalResumenVisor) modalResumenVisor.style.display = 'flex';
     });
   });

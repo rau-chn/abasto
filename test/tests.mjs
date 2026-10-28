@@ -28,7 +28,8 @@ import {
   calcularTotalesSalida,
   deducirCatalogo,
   agruparPorProductoYUnidad,
-  derivarEstadoLista
+  derivarEstadoLista,
+  obtenerComprobantesStand
 } from '../js/models.js';
 
 import {
@@ -177,13 +178,35 @@ test('normalizarUnidad utiliza tabla cerrada de equivalencias para agrupar singu
   assert.strictEqual(normalizarUnidad('cilindro'), 'cilindro');
 });
 
-test('crearStand inicializa comprobante en null o almacena la imagen Base64 provista', () => {
+test('crearStand y obtenerComprobantesStand soportan una o múltiples fotos con compatibilidad hacia atrás', () => {
   const stand1 = crearStand('Puesto 5');
   assert.strictEqual(stand1.comprobante, null);
+  assert.deepStrictEqual(stand1.comprobantes, []);
+  assert.deepStrictEqual(obtenerComprobantesStand(stand1), []);
 
-  const fakeDataUrl = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ...';
-  const stand2 = crearStand('Puesto 6', 'Pasaje 3', 'Nota', fakeDataUrl);
-  assert.strictEqual(stand2.comprobante, fakeDataUrl);
+  const fakeDataUrl1 = 'data:image/jpeg;base64,/9j/foto1...';
+  const fakeDataUrl2 = 'data:image/jpeg;base64,/9j/foto2...';
+  const fakeDataUrl3 = 'data:image/jpeg;base64,/9j/foto3...';
+
+  // Creación con un solo comprobante en string (modo clásico)
+  const stand2 = crearStand('Puesto 6', 'Pasaje 3', 'Nota', fakeDataUrl1);
+  assert.strictEqual(stand2.comprobante, fakeDataUrl1);
+  assert.deepStrictEqual(stand2.comprobantes, [fakeDataUrl1]);
+  assert.deepStrictEqual(obtenerComprobantesStand(stand2), [fakeDataUrl1]);
+
+  // Creación con arreglo de múltiples fotos (2 o 3 comprobantes)
+  const stand3 = crearStand('Puesto 7', 'Pasaje 4', 'Nota', [fakeDataUrl1, fakeDataUrl2, fakeDataUrl3]);
+  assert.strictEqual(stand3.comprobante, fakeDataUrl1); // primer elemento para compatibilidad
+  assert.deepStrictEqual(stand3.comprobantes, [fakeDataUrl1, fakeDataUrl2, fakeDataUrl3]);
+  assert.deepStrictEqual(obtenerComprobantesStand(stand3), [fakeDataUrl1, fakeDataUrl2, fakeDataUrl3]);
+
+  // Stand heredado que solo tiene la propiedad comprobante (sin comprobantes)
+  const standHeredado = { id: 'old1', nombre: 'Puesto Viejo', comprobante: fakeDataUrl2 };
+  assert.deepStrictEqual(obtenerComprobantesStand(standHeredado), [fakeDataUrl2]);
+
+  // Stand nulo o vacío
+  assert.deepStrictEqual(obtenerComprobantesStand(null), []);
+  assert.deepStrictEqual(obtenerComprobantesStand({}), []);
 });
 
 test('calcularTotalesStand calcula total calculado, total efectivo y diferencia', () => {
